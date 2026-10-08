@@ -1,0 +1,16 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: keel
+      POSTGRES_PASSWORD: keel
+      POSTGRES_DB: keel
+    # Host port 5433 avoids a local Postgres already bound to 5432.
+    ports: ["5433:5432"]
+    volumes:
+      - ./scripts/initdb:/docker-entrypoint-initdb.d:ro
+  api:
+    build: .
+    env_file: .env
+    depends_on: [db]
+    ports: ["8000:8000"]

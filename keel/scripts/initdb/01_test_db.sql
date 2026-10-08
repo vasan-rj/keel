@@ -1,0 +1,1 @@
+CREATE DATABASE keel_test;
