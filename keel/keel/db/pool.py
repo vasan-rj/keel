@@ -1,13 +1,19 @@
 from pathlib import Path
 import asyncpg
+from pgvector.asyncpg import register_vector
 
 _pool: asyncpg.Pool | None = None
 _SCHEMA = Path(__file__).parent / "schema.sql"
 
 
+async def _register(conn: asyncpg.Connection) -> None:
+    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    await register_vector(conn)
+
+
 async def init_pool(dsn: str) -> asyncpg.Pool:
     global _pool
-    _pool = await asyncpg.create_pool(dsn, min_size=1, max_size=10)
+    _pool = await asyncpg.create_pool(dsn, min_size=1, max_size=10, init=_register)
     return _pool
 
 
