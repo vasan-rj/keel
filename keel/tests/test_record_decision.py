@@ -78,3 +78,37 @@ async def test_concurrent_same_scope_serializes_chain_valid(conn, db_pool):
     )
     assert len(await repo.active_decisions(conn, pid, ["api:orders"])) == 2
     assert await validate_chain(conn, pid) is True
+
+
+from tests.fakes import ScriptedJudge
+import keel.conflict as conflict_pkg
+
+
+async def test_record_flags_pagination_conflict(conn, db_pool, monkeypatch):
+    monkeypatch.setattr(conflict_pkg, "get_judge", lambda settings=None: ScriptedJudge())
+    pid, person = await _ctx(conn)
+    first = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                  statement="orders API uses cursor-based pagination",
+                                  rationale="scales", scope_tags=["api:orders"])
+    assert first["conflicts"] == []
+    second = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                   statement="orders API should use offset pagination",
+                                   rationale="simpler", scope_tags=["api:orders"])
+    assert len(second["conflicts"]) == 1 and second["conflicts"][0]["relation"] == "contradicts"
+    assert second["coverage"] == "full" and second["degraded"] is False
+    assert await conn.fetchval("SELECT count(*) FROM conflict WHERE project_id=$1", pid) == 1
+    assert await conn.fetchval(
+        "SELECT count(*) FROM decision WHERE project_id=$1 AND embedding IS NOT NULL", pid) == 2
+    assert await validate_chain(conn, pid) is True
+
+
+async def test_record_detection_disabled_by_default(conn, db_pool):
+    # autouse fixture sets provider=none -> coverage disabled, no conflicts
+    pid, person = await _ctx(conn)
+    await record_decision(db_pool, Principal(pid, person, "s1"),
+                          statement="orders API uses cursor pagination", rationale="r",
+                          scope_tags=["api:orders"])
+    out = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                statement="orders API uses offset pagination", rationale="r",
+                                scope_tags=["api:orders"])
+    assert out["conflicts"] == [] and out["coverage"] == "disabled"

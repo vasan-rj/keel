@@ -4,6 +4,7 @@ from keel.scope import reconcile
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.conflict import check_on_insert
+from keel.llm.embeddings import get_embedder
 from keel.principal import Principal
 
 
@@ -14,6 +15,7 @@ def _scope_lock_key(project_id, tag: str) -> int:
 
 async def record_decision(pool, principal: Principal, *, statement, rationale,
                           scope_tags, supersedes=None) -> dict:
+    embedding = await get_embedder().embed(f"{statement}\n{rationale}")
     async with pool.acquire() as conn:
         async with conn.transaction():
             participant = await repo.get_participant(
@@ -40,12 +42,12 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
                 conn, project_id=principal.project_id, statement=statement,
                 rationale=rationale, scope_tags=tags, owner_person_id=principal.person_id,
                 source_participant_id=participant["id"], supersedes_id=supersedes_id,
-                status="active",
+                status="active", embedding=embedding,
             )
             if supersedes_id:
                 await repo.mark_superseded(conn, supersedes_id)
 
-            conflicts = await check_on_insert(conn, principal.project_id, row)
+            result = await check_on_insert(conn, principal.project_id, row)
 
             await append_event(
                 conn, principal.project_id,
@@ -57,4 +59,5 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
             box = await build_inbox(conn, principal)
 
     return {"decision_id": str(row["id"]), "status": row["status"],
-            "scope_tags": tags, "conflicts": conflicts, "inbox": box}
+            "scope_tags": tags, "conflicts": result["conflicts"], "degraded": result["degraded"],
+            "coverage": result["coverage"], "inbox": box}
