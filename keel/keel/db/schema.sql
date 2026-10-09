@@ -179,3 +179,10 @@ CREATE TABLE IF NOT EXISTS decision_request (
     answer_decision_id     uuid REFERENCES decision(id),
     created_at             timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS judgment_cache (
+    key        text PRIMARY KEY,
+    model      text NOT NULL,
+    judgment   jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);

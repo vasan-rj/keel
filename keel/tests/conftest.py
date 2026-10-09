@@ -12,7 +12,7 @@ def _test_dsn() -> str:
 
 
 _ALL_TABLES = [
-    "alert_feedback", "alert", "drift_signal", "decision_request", "outcome",
+    "judgment_cache", "alert_feedback", "alert", "drift_signal", "decision_request", "outcome",
     "handoff", "conflict", "claim", "dependency", "event", "decision",
     "goal", "participant", "person", "project",
 ]
