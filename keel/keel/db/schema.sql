@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS decision (
 );
 CREATE INDEX IF NOT EXISTS decision_scope_idx ON decision USING gin (scope_tags);
 CREATE INDEX IF NOT EXISTS decision_status_idx ON decision (project_id, status);
+ALTER TABLE decision ADD COLUMN IF NOT EXISTS ts tsvector
+    GENERATED ALWAYS AS (to_tsvector('english',
+        coalesce(statement,'') || ' ' || coalesce(rationale,''))) STORED;
+CREATE INDEX IF NOT EXISTS decision_ts_idx ON decision USING gin (ts);
 
 CREATE TABLE IF NOT EXISTS dependency (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

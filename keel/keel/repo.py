@@ -45,14 +45,14 @@ async def get_participant(conn, project_id, person_id, session_id) -> asyncpg.Re
 
 async def insert_decision(conn, *, project_id, statement, rationale, scope_tags,
                           owner_person_id, source_participant_id, supersedes_id=None,
-                          status="active") -> asyncpg.Record:
+                          status="active", embedding=None) -> asyncpg.Record:
     return await conn.fetchrow(
         """INSERT INTO decision
              (project_id, statement, rationale, scope_tags, owner_person_id,
-              source_participant_id, supersedes_id, status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *""",
+              source_participant_id, supersedes_id, status, embedding)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *""",
         project_id, statement, rationale, scope_tags, owner_person_id,
-        source_participant_id, supersedes_id, status,
+        source_participant_id, supersedes_id, status, embedding,
     )
 
 
