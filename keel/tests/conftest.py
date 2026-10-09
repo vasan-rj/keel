@@ -18,14 +18,22 @@ _ALL_TABLES = [
 ]
 
 
+async def _truncate_all(c) -> None:
+    await c.execute("TRUNCATE " + ", ".join(_ALL_TABLES) + " RESTART IDENTITY CASCADE")
+
+
 @pytest_asyncio.fixture
 async def db_pool():
     # Function-scoped: a session-scoped async pool binds to a different event
     # loop than the function-scoped tests, raising "attached to a different
     # loop" under pytest-asyncio 1.x. Fresh pool per test keeps one loop.
+    # Truncate on setup so tests that use ONLY db_pool (no `conn` fixture) start
+    # from a clean DB — otherwise their correctness depends on file order and on
+    # the global token_hash uniqueness constraint never colliding.
     pool = await db.init_pool(_test_dsn())
-    async with pool.acquire() as conn:
-        await db.apply_schema(conn)
+    async with pool.acquire() as c:
+        await db.apply_schema(c)
+        await _truncate_all(c)
     yield pool
     await db.close_pool()
 
@@ -33,5 +41,5 @@ async def db_pool():
 @pytest_asyncio.fixture
 async def conn(db_pool):
     async with db_pool.acquire() as c:
-        await c.execute("TRUNCATE " + ", ".join(_ALL_TABLES) + " RESTART IDENTITY CASCADE")
+        await _truncate_all(c)
         yield c

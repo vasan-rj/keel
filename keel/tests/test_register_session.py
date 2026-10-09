@@ -10,6 +10,27 @@ async def _principal(conn):
     return pid, person
 
 
+import pytest
+
+
+async def test_register_rejects_session_header_arg_mismatch(conn, db_pool):
+    pid, person = await _principal(conn)
+    # header (principal.session_id) says "B", tool arg says "A" -> ambiguous
+    principal = Principal(project_id=pid, person_id=person, session_id="B")
+    with pytest.raises(ValueError):
+        await register_session(db_pool, principal, harness="claude-code",
+                               tier="deep", session_id="A")
+
+
+async def test_register_uses_header_session_when_present(conn, db_pool):
+    pid, person = await _principal(conn)
+    principal = Principal(project_id=pid, person_id=person, session_id="s9")
+    out = await register_session(db_pool, principal, harness="claude-code",
+                                 tier="deep", session_id="s9")
+    assert out["session_id"] == "s9"
+    assert await repo.get_participant(conn, pid, person, "s9") is not None
+
+
 async def test_register_creates_participant_and_event(conn, db_pool):
     pid, person = await _principal(conn)
     principal = Principal(project_id=pid, person_id=person, session_id=None)
