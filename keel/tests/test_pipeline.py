@@ -1,3 +1,5 @@
+import json
+
 from keel import repo
 from keel.llm.embeddings import DeterministicEmbedder
 from keel.conflict.pipeline import detect, Subject
@@ -38,6 +40,12 @@ async def test_persists_contradiction(conn):
     assert len(res.conflicts) == 1 and res.conflicts[0].relation == "contradicts"
     assert res.conflicts[0].severity == "high" and res.coverage == "full" and res.degraded is False
     assert await conn.fetchval("SELECT count(*) FROM conflict WHERE project_id=$1", pid) == 1
+    rows = await conn.fetch("SELECT action, payload_json FROM event WHERE project_id=$1 "
+                            "AND action='conflicts.detected'", pid)
+    assert len(rows) == 1
+    pl = rows[0]["payload_json"]
+    pl = json.loads(pl) if isinstance(pl, str) else pl
+    assert pl["count"] == 1
 
 
 async def test_no_persist(conn):
@@ -49,6 +57,8 @@ async def test_no_persist(conn):
                        judge=ScriptedJudge(), top_k=8, threshold=0.6, persist=False, model="m1")
     assert len(res.conflicts) == 1
     assert await conn.fetchval("SELECT count(*) FROM conflict WHERE project_id=$1", pid) == 0
+    assert await conn.fetchval("SELECT count(*) FROM event WHERE project_id=$1 "
+                               "AND action='conflicts.detected'", pid) == 0
 
 
 async def test_evidence_gate_drops_noncited(conn):
