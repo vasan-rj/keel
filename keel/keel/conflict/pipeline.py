@@ -41,7 +41,7 @@ async def detect(conn, project_id, subject, *, judge, top_k, threshold, persist,
     conflicts, degraded = [], False
     for cand in rows:
         candidate = {"statement": cand["statement"], "rationale": cand["rationale"]}
-        cand_text = f"{candidate['statement']} {candidate['rationale'] or ''}"
+        cand_text = f"{candidate['statement']}\n{candidate['rationale'] or ''}"
         key = cache_key(model, subject.text, cand_text) if use_cache else None
         j = await get_cached(conn, key) if key else None
         if j is None:

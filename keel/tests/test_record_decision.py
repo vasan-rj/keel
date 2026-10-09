@@ -112,3 +112,35 @@ async def test_record_detection_disabled_by_default(conn, db_pool):
                                 statement="orders API uses offset pagination", rationale="r",
                                 scope_tags=["api:orders"])
     assert out["conflicts"] == [] and out["coverage"] == "disabled"
+
+
+async def test_record_fail_open_on_missing_key(conn, db_pool, monkeypatch):
+    monkeypatch.setenv("KEEL_LLM_PROVIDER", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    pid, person = await _ctx(conn)
+    out = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                statement="use cursor pagination", rationale="scales",
+                                scope_tags=["api:orders"])
+    assert await conn.fetchval("SELECT count(*) FROM decision WHERE project_id=$1", pid) == 1
+    assert out["coverage"] == "degraded"
+    assert out["degraded"] is True
+    assert await validate_chain(conn, pid) is True
+
+
+async def test_record_fail_open_on_embedder_error(conn, db_pool, monkeypatch):
+    import keel.tools.record_decision as rd
+
+    class _Boom:
+        async def embed(self, text):
+            raise RuntimeError("embed down")
+
+    monkeypatch.setattr(rd, "get_embedder", lambda settings=None: _Boom())
+    pid, person = await _ctx(conn)
+    out = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                statement="use cursor pagination", rationale="scales",
+                                scope_tags=["api:orders"])
+    assert await conn.fetchval("SELECT count(*) FROM decision WHERE project_id=$1", pid) == 1
+    assert await conn.fetchval(
+        "SELECT count(*) FROM decision WHERE project_id=$1 AND embedding IS NULL", pid) == 1
+    assert out["degraded"] is True
+    assert out["coverage"] == "degraded"

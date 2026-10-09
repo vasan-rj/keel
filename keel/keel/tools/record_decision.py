@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from keel import repo
 from keel.scope import reconcile
 from keel.events import append_event
@@ -6,6 +7,8 @@ from keel.inbox import build_inbox
 from keel.conflict import check_on_insert
 from keel.llm.embeddings import get_embedder
 from keel.principal import Principal
+
+log = logging.getLogger("keel.tools")
 
 
 def _scope_lock_key(project_id, tag: str) -> int:
@@ -15,7 +18,13 @@ def _scope_lock_key(project_id, tag: str) -> int:
 
 async def record_decision(pool, principal: Principal, *, statement, rationale,
                           scope_tags, supersedes=None) -> dict:
-    embedding = await get_embedder().embed(f"{statement}\n{rationale}")
+    try:
+        embedding = await get_embedder().embed(f"{statement}\n{rationale}")
+        embed_degraded = False
+    except Exception as exc:
+        log.warning("embedding failed; recording decision without embedding: %s", exc)
+        embedding = None
+        embed_degraded = True
     async with pool.acquire() as conn:
         async with conn.transaction():
             participant = await repo.get_participant(
@@ -47,7 +56,11 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
             if supersedes_id:
                 await repo.mark_superseded(conn, supersedes_id)
 
-            result = await check_on_insert(conn, principal.project_id, row)
+            try:
+                result = await check_on_insert(conn, principal.project_id, row)
+            except Exception as exc:
+                log.warning("conflict detection failed; degrading: %s", exc)
+                result = {"conflicts": [], "degraded": True, "coverage": "degraded"}
 
             await append_event(
                 conn, principal.project_id,
@@ -58,6 +71,8 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
             )
             box = await build_inbox(conn, principal)
 
+    degraded = result["degraded"] or embed_degraded
+    coverage = "degraded" if embed_degraded else result["coverage"]
     return {"decision_id": str(row["id"]), "status": row["status"],
-            "scope_tags": tags, "conflicts": result["conflicts"], "degraded": result["degraded"],
-            "coverage": result["coverage"], "inbox": box}
+            "scope_tags": tags, "conflicts": result["conflicts"], "degraded": degraded,
+            "coverage": coverage, "inbox": box}

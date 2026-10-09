@@ -23,7 +23,7 @@ async def candidates(conn, project_id, scope_tags, embedding, query_text, top_k,
         FROM scoped s
         LEFT JOIN vec ON vec.id = s.id
         LEFT JOIN kw  ON kw.id  = s.id
-        ORDER BY rrf DESC
+        ORDER BY rrf DESC, s.created_at, s.id
         LIMIT $7
         """,
         project_id, scope_tags, embedding, query_text or "", exclude_decision_id, rrf_k, top_k)
