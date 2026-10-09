@@ -14,6 +14,7 @@ from keel import repo
 from keel.tools.register_session import register_session as _register_session
 from keel.tools.get_context import get_context as _get_context
 from keel.tools.record_decision import record_decision as _record_decision
+from keel.tools.check_intent import check_intent as _check_intent
 
 _principal_var: contextvars.ContextVar[Principal | None] = contextvars.ContextVar(
     "keel_principal", default=None
@@ -111,11 +112,25 @@ async def record_decision(statement: str, rationale: str, scope_tags: list[str],
                                   rationale=rationale, scope_tags=scope_tags, supersedes=supersedes)
 
 
+@mcp.tool()
+async def check_intent(planned_action: str, scope_tags: list[str]) -> dict:
+    """Check a planned action against active team decisions before you act.
+
+    Call before implementing or proposing something that touches shared scope.
+    Returns any conflicts with evidence (relation, explanation, a quote from the
+    conflicting decision), plus coverage and a degraded flag. Warns only — never
+    blocks, records nothing. scope_tags must name at least one scope.
+    """
+    return await _check_intent(db.get_pool(), current_principal(),
+                               planned_action=planned_action, scope_tags=scope_tags)
+
+
 # Test-only helper: run the real auth resolution + dispatch without MCP framing.
 _HANDLERS = {
     "register_session": lambda p, a: _register_session(db.get_pool(), p, **a),
     "get_context": lambda p, a: _get_context(db.get_pool(), p, **a),
     "record_decision": lambda p, a: _record_decision(db.get_pool(), p, **a),
+    "check_intent": lambda p, a: _check_intent(db.get_pool(), p, **a),
 }
 
 
