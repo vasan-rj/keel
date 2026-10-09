@@ -1,190 +1,171 @@
 # Conflict Engine Slice — Design Spec
 
-**Version:** 0.1 · **Last updated:** 2026-10-09 · **Status:** approved for planning
+**Version:** 0.2 · **Last updated:** 2026-10-09 · **Status:** approved for planning
 
-Implements the real conflict-detection pipeline behind the Slice-1 `conflict.check_on_insert` stub. Source of truth: `context/ARCHITECTURE.md` §7 (pipeline), §7.1 (serialized insert), §7.2 (hot/cold path), §1 (principles), §4 (data model), §5 (tools). Builds on Slice 1 (`keel/`, 38 tests).
+Production-grade conflict detection, built open-source-first (not a hackathon stub). The **LLM judge is the primary detector from day one**; deterministic rules are a backstop, not the product. Replaces the Slice-1 `conflict.check_on_insert` stub. Source of truth: `context/ARCHITECTURE.md` §7 (pipeline), §7.1 (serialized insert), §7.2 (hot/cold path), §1 (principles), §4 (data model), §5 (tools). Builds on Slice 1 (`keel/`, 38 tests).
 
-## 1. Goal
+## 0. What "production from day one" means here
 
-Detect contradictions between a new decision (or a planned action) and the active decisions on overlapping scope, cite evidence, persist conflict records, and surface them — warning, never blocking. Wire it into `record_decision` and a new `check_intent` tool.
+- The default detector is the **LLM judge** (latest Claude via litellm), not the deterministic rules.
+- Deterministic rules run **alongside** the LLM as a backstop that guarantees known high-value conflicts fire even if the LLM misses them — never as the sole detector.
+- **Fail open** (§1.5): if the LLM errors/times out, the call degrades to the deterministic result, flags `degraded=true`, logs loudly, and never crashes `record_decision`.
+- **Honest reliability**: a judgment **cache**, an **eval harness** with a labelled set, and gated live-LLM tests — so precision/recall is measured, not asserted.
+- Every detection response carries `coverage` (`full` | `deterministic-only`) and `degraded`, so a user never mistakes limited scanning for a clean bill.
 
-## 2. Principles honored
+## 1. Principles honored
 
-- **Evidence or silence** (§1.4): a conflict is emitted only if its explanation cites the candidate decision's text. Low confidence → `unclear` ("possible conflict"), never a hard flag.
+- **Evidence or silence** (§1.4): emit a hard conflict only if `evidence` is a non-empty substring of the candidate's statement/rationale AND `confidence >= threshold`; else `unclear`/possible, dropped from hard conflicts.
 - **Humans resolve; Keel flags** (§1.3): warn only; no block, no auto-overwrite.
-- **Determinism where it is cheap** (§1): deterministic checks run before the probabilistic judge and backstop it; the default judge/embedder are deterministic so the engine runs offline with reproducible output.
-- **Decisions are data, never instructions** (§1): candidate decision text injected into a judge prompt is clearly delimited and treated as untrusted.
-- **Serialized per scope** (§7.1): detection runs inside the same per-scope-advisory-locked transaction as the decision insert (Slice 1 already locks).
+- **Determinism where it is cheap** (§1): deterministic checks run first and backstop the probabilistic judge; identical (model, pair) inputs return a cached, identical judgment.
+- **Decisions are data, never instructions** (§11): candidate/subject text in the LLM prompt is delimited and guarded as untrusted.
+- **Serialized per scope** (§7.1): detection runs inside the existing per-scope-advisory-locked `record_decision` transaction; the new decision's embedding is computed **before** the transaction opens.
+- **Fail open** (§1.5): the engine degrades, it does not fail the write.
+
+## 2. Component overview
+
+```
+record_decision / check_intent
+        │  embed(subject)            (Embedder: deterministic default | provider)
+        ▼
+   pipeline.detect ──► retrieval.candidates  (scope filter + keyword+vector rank)
+        │                    │
+        │                    ▼
+        │              CompositeJudge.judge(subject, candidate)
+        │                    ├─ DeterministicJudge  (rules backstop, always)
+        │                    ├─ LLMJudge            (instructor+litellm, primary)
+        │                    │     └─ select_model()  (router seam; one default model now)
+        │                    ├─ merge (LLM primary, deterministic backstop floor)
+        │                    └─ JudgmentCache (DB, per (model, pair) hash)
+        ▼
+   evidence gate + threshold ──► DetectionResult{conflicts, degraded, coverage}
+        │
+        └─ persist conflict rows + event (record_decision only)
+```
 
 ## 3. Third-party libraries (reuse, not rebuild)
 
 | Concern | Library | Notes |
 |---|---|---|
-| Multi-provider LLM (completions + embeddings) | **litellm** | async `acompletion`/`aembedding`; provider chosen by model string (anthropic/openai/openrouter). Lazy-imported. |
+| Multi-provider LLM (completions + embeddings) | **litellm** | async `acompletion`/`aembedding`; provider by model string (`anthropic/…`, `openai/…`, `openrouter/…`). Lazy-imported. |
 | Structured judge output | **instructor** (`from_provider("litellm/<model>", async_client=True)`, `response_model=Judgment`) | validated Pydantic output + retry on schema failure. Lazy-imported. |
-| Vector type + similarity | **pgvector** (`pgvector.asyncpg.register_vector`, `pgvector.Vector`, `<=>` cosine) | registered in the asyncpg pool `init` hook. Core dependency. |
+| Vector type + similarity | **pgvector** (`register_vector` in asyncpg pool `init`, `pgvector.Vector`, `<=>` cosine) | registered per connection. Core dependency. |
 
-`litellm` + `instructor` live in an optional `[llm]` extra and are imported **only** when a provider is configured. Default (`KEEL_LLM_PROVIDER=none`, `KEEL_EMBEDDING_PROVIDER=deterministic`) imports neither, so the core install and the whole test suite stay offline and hermetic. No memory-layer framework (Mem0/Zep/etc.) — OPEN_QUESTIONS #6 (own the store); such layers are possible later *adapters* for candidate ingestion / outcome analytics, never the core store.
+`litellm` + `instructor` live in the `[llm]` extra and are imported only inside provider/LLM classes. No memory-layer framework (Mem0/Zep/etc.) — OPEN_QUESTIONS #6.
 
-## 4. Configuration (env, all optional)
+## 4. Configuration (env)
 
 | Var | Default | Meaning |
 |---|---|---|
-| `KEEL_LLM_PROVIDER` | `none` | `none` → DeterministicJudge; else litellm provider (`anthropic`/`openai`/`openrouter`). |
-| `KEEL_LLM_MODEL` | — | litellm model string, e.g. `anthropic/claude-sonnet-...`. Required when provider ≠ none. |
-| `KEEL_EMBEDDING_PROVIDER` | `deterministic` | `deterministic` → DeterministicEmbedder; else litellm. |
-| `KEEL_EMBEDDING_MODEL` | — | e.g. `openai/text-embedding-3-small` (1536 dims, matches schema). |
-| `KEEL_CONFLICT_CONFIDENCE_THRESHOLD` | `0.6` | below → `unclear`/possible, not a hard conflict. |
-| `KEEL_CONFLICT_TOPK` | `5` | candidates retrieved for judgment. |
+| `KEEL_LLM_PROVIDER` | `anthropic` | detector provider; `none` disables the LLM (deterministic-only, for offline/tests). |
+| `KEEL_LLM_MODEL` | `anthropic/claude-sonnet-5-5` | litellm model string for the judge. |
+| `KEEL_EMBEDDING_PROVIDER` | `deterministic` | `deterministic` default; a provider enables semantic ranking. |
+| `KEEL_EMBEDDING_MODEL` | — | e.g. `openai/text-embedding-3-small` (1536 dims). |
+| `KEEL_CONFLICT_CONFIDENCE_THRESHOLD` | `0.6` | below → not a hard conflict. |
+| `KEEL_CONFLICT_TOPK` | `8` | candidates judged per check. |
+| `KEEL_LLM_TIMEOUT_S` | `20` | per-judgment LLM timeout; on exceed → degrade. |
+| `KEEL_JUDGMENT_CACHE` | `on` | cache judgments per (model, pair). |
 
-Provider API keys come from each provider's standard env var (litellm reads them). Settings extend `keel/config.py`.
+**Key handling (fail loud):** when `KEEL_LLM_PROVIDER != none`, the required provider key (e.g. `ANTHROPIC_API_KEY`) must be present; `get_judge()` raises a clear `RuntimeError` at construction if a provider is configured with no reachable key — never a cryptic failure mid-transaction. Default model follows CLAUDE.md "default to the latest, most capable Claude".
+
+**Embeddings boundary:** retrieval recall does **not** depend on semantic embeddings — `retrieval.candidates` ranks by **keyword overlap first, vector distance second**, and returns all scope-overlapping actives up to `top_k`. The deterministic embedder keeps the `vector` column populated and the query path exercised; a real embedding provider improves ranking only when a scope holds more than `top_k` actives. This is a deliberate boundary, not an omission.
 
 ## 5. Components and interfaces
 
-New package `keel/keel/conflict/` (replaces the `conflict.py` stub; `__init__` re-exports `check_on_insert` so `record_decision`'s import is unchanged) and `keel/keel/llm/`.
+New packages `keel/keel/llm/` and `keel/keel/conflict/` (the Slice-1 `conflict.py` becomes the package `conflict/`).
 
-### 5.1 `keel/llm/embeddings.py`
+### 5.1 `llm/embeddings.py`
+`Embedder` protocol (`dim`, `async embed(text) -> pgvector.Vector`); `DeterministicEmbedder` (default, sha256-seeded, 1536, stable); `ProviderEmbedder(model, aembed=None)` (lazy litellm; raises on empty model or wrong dim); `get_embedder(settings=None)`.
+
+### 5.2 `conflict/judge.py`
 ```python
-class Embedder(Protocol):
-    dim: int
-    async def embed(self, text: str) -> "pgvector.Vector": ...
-
-class DeterministicEmbedder:          # default; dim=1536
-    # sha256(text)-seeded RNG -> 1536 floats in [-1,1], L2-normalized.
-    # Stable: same text -> same vector (distance 0); not semantic.
-
-class ProviderEmbedder:               # litellm aembedding; lazy import
-    # dim from model (default 1536)
-
-def get_embedder() -> Embedder        # from config
+Judgment(BaseModel): relation: str; confidence: float; explanation: str; evidence: str
+Judge(Protocol): async def judge(subject_text, candidate) -> Judgment
+DeterministicJudge        # rules -> Judgment (backstop)
+def select_model(subject_text, candidate, settings) -> str   # router seam; returns settings.llm_model now
+LLMJudge(model_selector=select_model, create=None)
+    build_messages(subject_text, candidate) -> list[dict]    # delimited, injection-guarded
+    async judge(...) -> Judgment                              # instructor+litellm; timeout; retries via instructor
+CompositeJudge(llm: LLMJudge | None, deterministic: DeterministicJudge, timeout_s)
+    async judge(...) -> tuple[Judgment, bool]                 # (judgment, degraded)
+        # run deterministic (always). if llm: try llm within timeout.
+        #   - llm ok  -> primary = llm; if deterministic found a HARD relation the
+        #     llm rated consistent/unclear, override with deterministic (backstop floor).
+        #   - llm error/timeout -> primary = deterministic, degraded=True, log.
+        # llm is None (provider none) -> primary = deterministic, degraded=False.
+def get_judge(settings=None) -> CompositeJudge               # raises if provider set but no key
 ```
 
-### 5.2 `keel/conflict/judge.py`
+### 5.3 `conflict/deterministic.py`
+`Hint(relation, confidence, key, evidence)`; `check(subject_text, candidate) -> Hint | None` (pagination style, page-size value, identical statement; extensible).
+
+### 5.4 `conflict/cache.py` + `judgment_cache` table
+```sql
+CREATE TABLE IF NOT EXISTS judgment_cache (
+    key         text PRIMARY KEY,              -- sha256(model | subject_text | candidate_text)
+    model       text NOT NULL,
+    judgment    jsonb NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+```
 ```python
-RELATIONS = ("contradicts", "duplicates", "supersedes", "consistent", "unclear")
+def cache_key(model, subject_text, candidate_text) -> str
+async def get_cached(conn, key) -> Judgment | None
+async def put_cached(conn, key, model, judgment) -> None
+```
+Cache is consulted before judging a pair and written after; keyed per model so a model change invalidates naturally. Deterministic-only path uses `model="deterministic"`.
 
-class Judgment(BaseModel):
-    relation: Literal[RELATIONS]
-    confidence: float                 # 0..1
-    explanation: str
-    evidence: str                     # must quote candidate text (evidence gate)
+### 5.5 `conflict/retrieval.py`
+`async candidates(conn, project_id, scope_tags, embedding, top_k, exclude_decision_id=None, subject_text="") -> list[Record]` — stage 1 scope overlap (exclude self), stage 2 rank by **keyword overlap desc, then vector distance asc (NULLS LAST)**, limit `top_k`.
 
-class Judge(Protocol):
-    async def judge(self, subject: "Subject", candidate: dict) -> Judgment: ...
-
-class DeterministicJudge:             # default
-    # consumes deterministic-check hints + simple heuristics -> Judgment with
-    # explanation prose and evidence = the candidate statement substring it keys on.
-
-class LLMJudge:                       # instructor+litellm; lazy import
-    # delimited, injection-guarded prompt; response_model=Judgment.
-
-def get_judge() -> Judge              # from config
+### 5.6 `conflict/pipeline.py`
+```python
+Subject(text, scope_tags, embedding, subject_type, subject_ref)
+Conflict(candidate_id, relation, severity, explanation, evidence, confidence)
+DetectionResult(conflicts: list[Conflict], degraded: bool, coverage: str)   # coverage: "full"|"deterministic-only"
+async detect(conn, project_id, subject, *, judge, top_k, threshold, persist) -> DetectionResult
+    # per candidate: cache lookup -> judge -> cache store; evidence gate + threshold;
+    # severity from confidence/backstop; persist conflict rows + event when persist=True.
+    # coverage = "deterministic-only" if judge has no llm OR any candidate degraded; else "full".
 ```
 
-### 5.3 `keel/conflict/deterministic.py`
-```python
-@dataclass
-class Hint:
-    relation: str        # contradicts | duplicates | consistent
-    confidence: float
-    key: str             # what matched, e.g. "pagination-style"
-    evidence: str        # candidate substring
-
-def check(subject_text: str, candidate: dict) -> Hint | None
-# Rules (ordered): pagination style cursor vs offset; page-size value mismatch
-# on a shared key; near-identical statement -> duplicates. Returns None if no rule fires.
-```
-
-### 5.4 `keel/conflict/retrieval.py`
-```python
-async def candidates(conn, project_id, scope_tags: list[str],
-                     embedding: "pgvector.Vector", top_k: int,
-                     exclude_decision_id=None) -> list[asyncpg.Record]
-# Stage 1: active decisions with overlapping scope_tags (&&), exclude self.
-# Stage 2: ORDER BY combined rank = vector distance (embedding <=> $) blended
-#          with keyword overlap; LIMIT top_k.
-```
-
-### 5.5 `keel/conflict/pipeline.py`
-```python
-@dataclass
-class Subject:
-    text: str                        # statement + rationale
-    scope_tags: list[str]
-    embedding: "pgvector.Vector"
-    subject_type: str                # "decision" | "planned_action"
-    subject_ref: str                 # decision id, or a synthetic ref for planned
-
-@dataclass
-class Conflict:
-    candidate_id: str; relation: str; severity: str
-    explanation: str; evidence: str; confidence: float
-
-async def detect(conn, project_id, subject: Subject, *, persist: bool,
-                 judge: Judge, top_k: int, threshold: float) -> list[Conflict]
-# 1 scope filter + 2 retrieval (retrieval.candidates)
-# 3 deterministic.check -> hint per candidate
-# 4 judge.judge per candidate (hint passed in for the deterministic judge)
-# 5 evidence gate: keep only relation in {contradicts,duplicates,supersedes}
-#   AND confidence >= threshold AND evidence is a non-empty substring of the
-#   candidate statement/rationale. Below threshold -> relation downgraded to
-#   "unclear" and DROPPED from hard conflicts (returned as possible only).
-# severity: deterministic high-confidence hint -> "high"; else map confidence.
-# persist=True: INSERT conflict rows (decision_a_id=candidate, subject_type,
-#   subject_ref, relation, severity, explanation, status='open') + append event.
-```
-
-### 5.6 `keel/conflict/__init__.py`
-```python
-async def check_on_insert(conn, project_id, decision_row) -> list[dict]
-# builds a Subject from decision_row (embedding already stored), calls detect(
-# persist=True), returns conflicts as dicts for record_decision's response.
-```
+### 5.7 `conflict/__init__.py`
+`async check_on_insert(conn, project_id, decision_row, *, judge=None, threshold=None, top_k=None) -> dict` → `{"conflicts": [...], "degraded": bool, "coverage": str}` (builds a decision `Subject`, `detect(persist=True)`).
 
 ## 6. Wiring
 
-### 6.1 `record_decision` (modify `keel/keel/tools/record_decision.py`)
-- Compute `embedding = await get_embedder().embed(statement + "\n" + rationale)` **before** opening the transaction (an embedding provider call must not run under the scope lock; the deterministic embedder is instant anyway).
-- Pass `embedding` to `repo.insert_decision` (new param → stored in `decision.embedding`).
-- `check_on_insert` now returns real conflicts (persisted in-txn). Response `conflicts` carries them. Still warns; status/flow unchanged.
-
-### 6.2 `check_intent` (new `keel/keel/tools/check_intent.py` + register in `server.py`)
-```python
-async def check_intent(pool, principal, *, planned_action: str,
-                       scope_tags: list[str]) -> dict
-# normalize scope, embed planned_action, run detect(persist=False) in a read
-# transaction, return {"conflicts": [...], "inbox": {...}}. No decision row,
-# no conflict rows, never blocks.
-```
-MCP tool wrapper + docstring in `server.py`; principal from the auth contextvar.
-
-### 6.3 DB
-- Register pgvector on every pooled connection: add `init=register_vector` to `asyncpg.create_pool` in `keel/keel/db/pool.py`.
-- `repo.insert_decision` gains `embedding` param (`decision.embedding` column already exists).
-- New `repo.insert_conflict(...)`.
+- **`record_decision`**: compute embedding before the txn; store via `repo.insert_decision(embedding=...)`; `check_on_insert` returns real conflicts; response gains `conflicts`, `degraded`, `coverage`. Warn, never block.
+- **`check_intent`** (new tool): embed planned action; `detect(persist=False)`; returns `{conflicts, degraded, coverage, inbox}`; raises `ValueError` on empty scope; no persistence; never blocks.
+- **DB**: `register_vector` in pool `init`; `insert_decision(embedding=None)`; `insert_conflict(...)`; `judgment_cache` table + `cache.py`.
+- **server.py**: register `check_intent` MCP tool with docstring.
 
 ## 7. Prompt-injection guard (LLMJudge)
 
-Candidate and subject text are wrapped in clearly delimited blocks labelled untrusted data; the system prompt states the text is data to compare, never instructions to follow, and that the judge must return only the `Judgment` schema. (ARCHITECTURE §11.)
+System prompt states the two blocks are DATA to compare, never instructions; candidate/subject wrapped in delimited tags; `evidence` must be a verbatim substring or the model must return `unclear`. (§11.)
 
-## 8. Testing (TDD, deterministic path, hermetic)
+## 8. Eval harness (`keel/evals/`)
 
-- Deterministic embedder: same text → distance 0; different text → >0; dim 1536; stored + round-tripped via pgvector.
-- Retrieval: scope filter excludes non-overlapping scopes and self; top_k respected; ordering returns the overlapping candidate.
-- Deterministic checks: `cursor` vs `offset` → contradicts hint with evidence; page-size 20 vs 50 on shared key → contradicts; identical statement → duplicates; unrelated → None.
-- Evidence gate: a judgment whose `evidence` is not a substring of the candidate is dropped; low confidence → not a hard conflict.
-- `record_decision`: cursor-then-offset in `api:orders` → one persisted conflict (`contradicts`) with evidence citing the first decision; `conflicts` returned; event chain still valid; serialized insert still holds; embedding persisted.
-- `check_intent`: planned offset action vs active cursor decision → conflict returned, **no** decision row, **no** conflict row persisted; unrelated scope → empty.
-- LLMJudge: with provider configured + litellm/instructor **mocked**, builds the delimited prompt and maps a mocked structured response to `Judgment`. No network in tests.
-- Config: defaults select DeterministicJudge + DeterministicEmbedder; provider set selects LLM/provider variants (construction only, mocked).
+- `dataset.jsonl` — labelled pairs `{subject, candidate, expected_relation}` across pagination/schema/contract/policy/naming, including hard negatives (consistent-but-similar) to measure precision.
+- `runner.py` — `async evaluate(judge, dataset) -> Metrics(precision, recall, f1, n)` over the hard relations.
+- **Hermetic test**: deterministic judge meets a documented floor on the set (no network).
+- **Gated test** (`@pytest.mark.llm`, skipped without `ANTHROPIC_API_KEY`): the real LLM judge meets a higher floor; prints metrics. This is how reliability claims are earned.
 
-## 9. Out of scope (named follow-ups)
+## 9. Testing strategy (honest + hermetic)
 
-Alerts/propagation (§8) and the `alert` rows; drift / `report_activity` edit-hook path (§7.1 sources); hot-path local classifier (§7.2); complexity router across models (Q7) — the `[llm]` layer is the seam for it; dashboard; lesson loop (§9.1); real embedding/LLM provider tuning + the labelled eval set (§7).
+- **conftest**: an autouse fixture sets `KEEL_LLM_PROVIDER=none` for the default suite, so unit/integration tests run on the deterministic judge — fast, free, offline. Pipeline tests inject fake judges to exercise merge/fail-open/evidence-gate paths deterministically.
+- **LLMJudge unit tests**: mocked `create` — verify delimited/guarded prompt and structured-response mapping; no network.
+- **Fail-open test**: a judge whose LLM raises → `degraded=True`, deterministic result used, no exception.
+- **Backstop test**: LLM says `consistent` but deterministic finds `contradicts` → conflict still emitted.
+- **Cache test**: second identical judgment served from cache (judge called once).
+- **Live tests** (`llm` marker): real provider, gated by key — construction, one real judgment, and the eval floor.
+- Marker registered in `pyproject.toml`; `pytest` skips `llm` tests without a key.
 
-## 10. Risks
+## 10. Out of scope (named follow-ups)
 
-- **Lock held during judgment:** with an LLM judge, the per-scope advisory lock is held through the (cold-path) LLM call — this is the intended serialization (§7.1), acceptable because `record_decision` is rare. The embedding call is moved outside the lock. Documented, not mitigated further this slice.
-- **Deterministic embedder is non-semantic:** vector retrieval is structurally exercised but semantic quality needs a real embedder; scope + keyword carry the signal offline and in the demo.
-- **litellm/instructor are optional + lazy:** a misconfigured provider (missing model/key) must raise a clear error at judge/embedder construction, not at call time mid-transaction.
+Complexity **router** across multiple models (the `select_model` seam is the hook — next slice); alerts/propagation (§8); drift / `report_activity` (§7.1 sources); hot-path local classifier (§7.2); dashboard; lesson loop (§9.1); semantic-embedding provider tuning + a larger eval corpus.
+
+## 11. Risks
+
+- **Lock held during LLM judgment**: the per-scope advisory lock is held through the cold-path LLM call (intended serialization, §7.1); `record_decision` is rare, timeout bounds it, and fail-open prevents a stuck write. Embedding runs outside the lock.
+- **Deterministic embedder is non-semantic**: mitigated by keyword-first retrieval ranking and judging all scope actives up to `top_k`; semantic provider improves large scopes.
+- **LLM cost/latency per check**: bounded by cache + timeout + `top_k`; the router slice adds model tiering. Measured by the eval harness before any external claim.
+- **Provider misconfig**: fail loud at construction (missing key/model), never mid-transaction.
