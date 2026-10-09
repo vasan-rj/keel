@@ -78,3 +78,12 @@ async def active_decisions(conn, project_id, scope_tags) -> list[asyncpg.Record]
         "SELECT * FROM decision WHERE project_id=$1 AND status='active' ORDER BY created_at DESC",
         project_id,
     )
+
+
+async def insert_conflict(conn, *, project_id, decision_a_id, subject_type, subject_ref,
+                          relation, severity, explanation) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO conflict (project_id, decision_a_id, subject_type, subject_ref,
+             relation, severity, explanation, status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'open') RETURNING *""",
+        project_id, decision_a_id, subject_type, subject_ref, relation, severity, explanation)
