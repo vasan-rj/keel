@@ -43,3 +43,9 @@ async def conn(db_pool):
     async with db_pool.acquire() as c:
         await _truncate_all(c)
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_llm(monkeypatch):
+    monkeypatch.setenv("KEEL_LLM_PROVIDER", "none")
+    monkeypatch.setenv("KEEL_EMBEDDING_PROVIDER", "deterministic")
