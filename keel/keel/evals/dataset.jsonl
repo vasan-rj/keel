@@ -1,0 +1,8 @@
+{"subject":"orders API should use offset pagination","candidate":"orders API uses cursor-based pagination","expected":"hard"}
+{"subject":"default page size should be 50","candidate":"default page size is 20","expected":"hard"}
+{"subject":"checkout must support guest users","candidate":"checkout requires a logged-in account","expected":"hard"}
+{"subject":"auth uses short-lived JWTs","candidate":"authentication uses server-side sessions","expected":"hard"}
+{"subject":"store amounts in cents as integers","candidate":"monetary amounts are stored as integer cents","expected":"consistent"}
+{"subject":"timestamps are UTC ISO-8601","candidate":"timestamps use UTC in ISO-8601","expected":"consistent"}
+{"subject":"use a blue primary button","candidate":"orders API uses cursor pagination","expected":"consistent"}
+{"subject":"rate limit is 100 req/min","candidate":"API rate limit is 100 requests per minute","expected":"consistent"}
