@@ -28,7 +28,7 @@ AI work is going multiplayer: teams will share live agent sessions to watch, red
 
 ## What Keel is not
 
-- Not another memory store. It can sit on top of one (OpenKT, Mem0, Postgres).
+- Not another memory store. It can sit on top of one (Mem0, Postgres, or a knowledge-graph store).
 - Not a wiki or knowledge-base hygiene tool. It works on live agent work, not published documents.
 - Not a coding-agent orchestrator or file-lock tool. It operates on *intent*, not files.
 - Not a live shared-session runtime. Harness vendors are best placed to build that; Keel works across all of them.

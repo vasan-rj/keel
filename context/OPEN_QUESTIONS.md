@@ -14,8 +14,8 @@ Add `[GAP]` or `[CHALLENGE]` items at the bottom. Mark decisions with the owner 
    - **[GAP] Open — to discuss.** Leaning: free-form proposal by agents + **server-side normalization** against existing tags (fuzzy match → canonical), since scope-tag mismatch is the single silent point of failure. Need to decide whether projects can pin a controlled vocabulary. Owner: team.
 
 ## Technical
-6. **Build on a memory layer or own the store?** Start with plain Postgres, or integrate OpenKT/Mem0 from day one?
-   - **Decision (vasanr, 2026-10-09):** Own the store — plain Postgres 16 + pgvector, no Mem0/OpenKT dependency in v1. Rationale: our value is determinism, append-only hash chain, serialized-per-scope conflict insert, and auditable retrieval — a general memory layer abstracts away exactly the control the audit trail and deny-once rule depend on. Keep the store ours; a memory layer can be an optional adapter later.
+6. **Build on a memory layer or own the store?** Start with plain Postgres, or integrate a memory layer (e.g., Mem0) from day one?
+   - **Decision (vasanr, 2026-10-09):** Own the store — plain Postgres 16 + pgvector, no memory-layer dependency in v1. Rationale: our value is determinism, append-only hash chain, serialized-per-scope conflict insert, and auditable retrieval — a general memory layer abstracts away exactly the control the audit trail and deny-once rule depend on. Keep the store ours; a memory layer can be an optional adapter later.
 7. **Which LLM for conflict judgment?** Cost and latency per check need a benchmark.
    - **Decision (vasanr, 2026-10-09):** Two-tier + a complexity router.
      - **Cold path (conflict judgment / explanations):** a strong reasoning model (default latest Claude Opus) for complex/ambiguous candidates — quality and explanation prose matter more than latency here.
@@ -30,7 +30,7 @@ Add `[GAP]` or `[CHALLENGE]` items at the bottom. Mark decisions with the owner 
 ## Business
 10. **License.** Apache-2.0 vs a more protective license for the server.
 11. **Open-core boundary.** Observal ships SSO, SCIM, and audit logs as open source. What stays paid for us?
-12. **Partner or compete with OpenKT?** Reach out to the maintainers?
+12. **Partner or compete with a memory-layer project (e.g., Mem0)?** Reach out to the maintainers? *(Note: an earlier draft referenced "OpenKT" — that project name could not be verified as of 2026-10-09; do not cite it externally.)*
 13. **Spec standard.** Publish the decision schema and MCP tool contract as an open spec early?
 
 ## Outcome loop and AI-native framing

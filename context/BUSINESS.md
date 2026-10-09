@@ -1,6 +1,6 @@
 # Business Perspective — Keel (working name)
 
-**Version:** 1.0 (final draft for team review) · **Last updated:** 2026-10-05
+**Version:** 1.0.1 (final draft for team review) · **Last updated:** 2026-10-09
 
 ---
 
@@ -35,7 +35,7 @@ Launch Keel as an **open-source, vendor-neutral intent ledger** for AI builders,
 
 | Category | Examples | What they do | Gap Keel fills |
 |---|---|---|---|
-| Shared agent memory | OpenKT, Mem0 OpenMemory, agentmemory, team-memory-mcp | Store and recall context across agents and people | No contradiction detection or push propagation |
+| Shared agent memory | Mem0 OpenMemory, agentmemory, team-memory-mcp | Store and recall context across agents and people | No contradiction detection or push propagation |
 | Coding-agent coordination | agent-coord, Concord MCP, MAC, Turf, CoordMCP | File locks, task claims, messaging between coding agents | File-level and developer-only; no semantic intent |
 | Multiplayer agent workspaces | HumanLayer | Team workspace for coding agent sessions, plan artifacts, design reviews, diffs; comments and decisions feed back to agents | Coding-only, task-scoped, a destination workspace, not open source (yet) |
 | Agent fleet orchestrators | Orchestrator.inc, others | One person's orchestrator plans work, spawns workers in worktrees, routes CI and review feedback | Single-supervisor scope; no cross-person consistency (complementary; adapter target) |
@@ -46,7 +46,7 @@ Launch Keel as an **open-source, vendor-neutral intent ledger** for AI builders,
 | Live multiplayer agent sessions | Expected from harness vendors and new startups (per YC RFS) | Many people inside one running agent session | Consistency *across* sessions and tools; Keel integrates them as participants |
 | Enterprise context graphs | Atlassian Teamwork Graph / Rovo, Microsoft Graph, Glean | Organization-wide context exposed to agents | Vendor-centric; no neutral cross-tool drift detection |
 
-Sources: https://github.com/Observal/Observal · https://github.com/generalmachines/OpenKT-ai · https://mem0.ai/blog/introducing-openmemory-mcp · https://github.com/bradagi/awesome-cli-coding-agents · https://www.eesel.ai/blog/best-ai-tools-for-knowledge-base-management · https://github.blog/2025-09-02-spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/
+Sources: https://github.com/Observal/Observal · https://mem0.ai/blog/introducing-openmemory-mcp · https://github.com/bradagi/awesome-cli-coding-agents · https://www.eesel.ai/blog/best-ai-tools-for-knowledge-base-management · https://github.blog/2025-09-02-spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/
 
 **Note:** this scan is based on public READMEs and articles as of 2026-10-05. Re-validate before any external pitch.
 
@@ -146,7 +146,7 @@ Sources: https://support.claude.com/en/articles/11175166-about-custom-connectors
 | Atlassian, Notion, or Microsoft add cross-role drift detection | Medium–high | Stay neutral and agent-native; integrate them as sources |
 | Agent workspaces (e.g., HumanLayer) add cross-task, cross-person contradiction detection | Medium–high | Stay a neutral layer; integrate with workspaces; differentiate on cross-role and open source |
 | Harness vendors build shared sessions plus cross-session consistency inside their own tools | Medium | Neutrality across harnesses; integrate their shared sessions as participants |
-| Memory-layer projects (e.g., OpenKT) add contradiction detection | Medium | Move fast on propagation and lifecycle; consider partnering |
+| Memory-layer projects (e.g., Mem0) add contradiction detection | Medium | Move fast on propagation and lifecycle; consider partnering |
 | Noise causes users to disable alerts | High if unmanaged | Precision over recall; evidence on every alert |
 | Open-source traction without monetization | Medium | Define the enterprise boundary early |
 | Crowded space makes discovery hard | High | Sharp single-player wedge and clear demo |
