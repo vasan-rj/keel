@@ -17,6 +17,7 @@ async def seed(pool, *, dev_token: str, teammate_token: str) -> None:
 async def _main() -> None:
     pool = await db.init_pool(get_settings().database_url)
     try:
+        await db.ensure_schema(pool)
         await seed(pool,
                    dev_token=os.environ.get("KEEL_DEV_TOKEN", "dev-token"),
                    teammate_token=os.environ.get("KEEL_TEAMMATE_TOKEN", "teammate-token"))

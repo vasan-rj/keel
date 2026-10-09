@@ -136,7 +136,8 @@ def _build_app():
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
-        await db.init_pool(get_settings().database_url)
+        pool = await db.init_pool(get_settings().database_url)
+        await db.ensure_schema(pool)
         try:
             async with original_lifespan(app):
                 yield

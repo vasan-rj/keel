@@ -26,3 +26,13 @@ async def close_pool() -> None:
 
 async def apply_schema(conn: asyncpg.Connection) -> None:
     await conn.execute(_SCHEMA.read_text())
+
+
+async def ensure_schema(pool: asyncpg.Pool) -> None:
+    """Apply the v0 schema (idempotent) using a connection from the pool.
+
+    Lets the server and seed script self-bootstrap an empty database; schema.sql
+    uses CREATE ... IF NOT EXISTS throughout, so this is safe to call every boot.
+    """
+    async with pool.acquire() as conn:
+        await apply_schema(conn)
