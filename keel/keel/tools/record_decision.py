@@ -1,6 +1,7 @@
 import hashlib
 import logging
 from keel import repo
+from keel import propagation
 from keel.scope import reconcile
 from keel.events import append_event
 from keel.inbox import build_inbox
@@ -64,6 +65,11 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
             except Exception as exc:
                 log.warning("conflict detection failed; degrading: %s", exc)
                 result = {"conflicts": [], "degraded": True, "coverage": "degraded"}
+
+            await propagation.propagate_decision(
+                conn, principal.project_id, row, participant["id"], supersedes_id)
+            await propagation.propagate_conflicts(
+                conn, principal.project_id, result["conflicts"], participant["id"])
 
             await append_event(
                 conn, principal.project_id,
