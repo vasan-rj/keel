@@ -19,6 +19,8 @@ from keel.tools.claims import declare_dependency as _declare_dependency, \
     claim_scope as _claim_scope, release_scope as _release_scope
 from keel.tools.alerts import list_alerts as _list_alerts, ack_alert as _ack_alert
 from keel.tools.resolve_conflict import resolve_conflict as _resolve_conflict
+from keel.tools.handoff import create_handoff as _create_handoff, \
+    accept_handoff as _accept_handoff, decline_handoff as _decline_handoff
 
 _principal_var: contextvars.ContextVar[Principal | None] = contextvars.ContextVar(
     "keel_principal", default=None
@@ -197,6 +199,40 @@ async def resolve_conflict(conflict_id: str, resolution: str) -> dict:
                                    resolution=resolution)
 
 
+@mcp.tool()
+async def create_handoff(to_person: str, scope_tags: list[str], note: str | None = None,
+                         to_session: str | None = None) -> dict:
+    """Hand off a scope to a teammate with its context attached.
+
+    Resolves `to_person` by display name and snapshots the active decisions and
+    open conflicts on the given `scope_tags`, creating a pending handoff the
+    recipient sees in their inbox. Optionally target one of their sessions with
+    `to_session`. Returns the handoff id, status, and an `inbox`.
+    """
+    return await _create_handoff(db.get_pool(), current_principal(), to_person=to_person,
+                                 scope_tags=scope_tags, note=note, to_session=to_session)
+
+
+@mcp.tool()
+async def accept_handoff(handoff_id: str) -> dict:
+    """Accept a handoff addressed to you: claim its scope and depend on its decisions.
+
+    Recipient only. Transfers the scope claim from the sender to this session and
+    declares dependencies on the handed-off decisions so future changes alert you.
+    Returns the handoff status and an `inbox`.
+    """
+    return await _accept_handoff(db.get_pool(), current_principal(), handoff_id=handoff_id)
+
+
+@mcp.tool()
+async def decline_handoff(handoff_id: str) -> dict:
+    """Decline a handoff addressed to you; it closes with no scope or dependency change.
+
+    Recipient only. Returns the handoff status and an `inbox`.
+    """
+    return await _decline_handoff(db.get_pool(), current_principal(), handoff_id=handoff_id)
+
+
 # Test-only helper: run the real auth resolution + dispatch without MCP framing.
 _HANDLERS = {
     "register_session": lambda p, a: _register_session(db.get_pool(), p, **a),
@@ -209,6 +245,9 @@ _HANDLERS = {
     "list_alerts": lambda p, a: _list_alerts(db.get_pool(), p),
     "ack_alert": lambda p, a: _ack_alert(db.get_pool(), p, **a),
     "resolve_conflict": lambda p, a: _resolve_conflict(db.get_pool(), p, **a),
+    "create_handoff": lambda p, a: _create_handoff(db.get_pool(), p, **a),
+    "accept_handoff": lambda p, a: _accept_handoff(db.get_pool(), p, **a),
+    "decline_handoff": lambda p, a: _decline_handoff(db.get_pool(), p, **a),
 }
 
 
