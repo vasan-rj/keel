@@ -113,6 +113,19 @@ async def test_decline_handoff(conn, db_pool):
     assert await repo.participants_with_claim_overlap(conn, pid, ["api:orders"]) == []
 
 
+async def test_same_session_self_handoff_keeps_claim(conn, db_pool):
+    # degenerate path: a session hands off to its own person and the SAME session
+    # accepts. receiver participant == sender participant, so the sender-claim
+    # release must not delete the claim just inserted for the receiver.
+    pid = await repo.upsert_project(conn, "demo")
+    vasan, p1 = await _session(conn, pid, "vasan", "s1")
+    out = await create_handoff(db_pool, Principal(pid, vasan, "s1"),
+                               to_person="vasan", scope_tags=["api:orders"], note="to myself")
+    await accept_handoff(db_pool, Principal(pid, vasan, "s1"), handoff_id=out["handoff_id"])
+    claimers = {r["id"] for r in await repo.participants_with_claim_overlap(conn, pid, ["api:orders"])}
+    assert p1 in claimers  # claim survives
+
+
 async def test_accept_malformed_id_errors_cleanly(conn, db_pool):
     pid, sender, spart, receiver, rpart, d = await _project_with_decision(conn)
     with pytest.raises(LookupError):

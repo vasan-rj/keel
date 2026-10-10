@@ -79,7 +79,10 @@ async def accept_handoff(pool, principal: Principal, *, handoff_id) -> dict:
             tags = list(h["scope_tags"])
             expires = datetime.now(timezone.utc) + timedelta(seconds=_DEFAULT_CLAIM_TTL_S)
             await repo.insert_claim(conn, principal.project_id, receiver["id"], tags, expires)
-            await repo.release_claims(conn, h["from_participant_id"], tags)
+            # don't release when the sender session is also the receiver — that would
+            # delete the claim just inserted (degenerate same-session self-handoff).
+            if h["from_participant_id"] != receiver["id"]:
+                await repo.release_claims(conn, h["from_participant_id"], tags)
             deps = 0
             for did in h["decision_ids"]:
                 if await repo.get_decision(conn, did) is not None:
