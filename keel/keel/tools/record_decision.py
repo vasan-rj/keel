@@ -57,7 +57,10 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
                 await repo.mark_superseded(conn, supersedes_id)
 
             try:
-                result = await check_on_insert(conn, principal.project_id, row)
+                # savepoint: a Postgres error during detection rolls back only
+                # detection, leaving the outer txn (the decision write) healthy.
+                async with conn.transaction():
+                    result = await check_on_insert(conn, principal.project_id, row)
             except Exception as exc:
                 log.warning("conflict detection failed; degrading: %s", exc)
                 result = {"conflicts": [], "degraded": True, "coverage": "degraded"}

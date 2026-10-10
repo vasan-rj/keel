@@ -144,3 +144,24 @@ async def test_record_fail_open_on_embedder_error(conn, db_pool, monkeypatch):
         "SELECT count(*) FROM decision WHERE project_id=$1 AND embedding IS NULL", pid) == 1
     assert out["degraded"] is True
     assert out["coverage"] == "degraded"
+
+
+async def test_record_savepoint_isolates_detection_db_error(conn, db_pool, monkeypatch):
+    # A Postgres error DURING detection must not poison the outer txn: the
+    # decision is still recorded (fail-open), and the decision.recorded event
+    # commits on a healthy transaction (chain valid).
+    import keel.tools.record_decision as rd
+
+    async def _poison(conn, project_id, decision_row, **kwargs):
+        await conn.execute("SELECT 1/0")  # aborts the transaction, then raises
+
+    monkeypatch.setattr(rd, "check_on_insert", _poison)
+    pid, person = await _ctx(conn)
+    out = await record_decision(db_pool, Principal(pid, person, "s1"),
+                                statement="use cursor pagination", rationale="scales",
+                                scope_tags=["api:orders"])
+    assert await conn.fetchval("SELECT count(*) FROM decision WHERE project_id=$1", pid) == 1
+    assert out["coverage"] == "degraded"
+    assert out["degraded"] is True
+    assert out["conflicts"] == []
+    assert await validate_chain(conn, pid) is True
