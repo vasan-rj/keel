@@ -19,6 +19,7 @@ class Subject:
 class Conflict:
     candidate_id: str; relation: str; severity: str
     explanation: str; evidence: str; confidence: float
+    conflict_id: str | None = None
 
 
 @dataclass
@@ -58,13 +59,15 @@ async def detect(conn, project_id, subject, *, judge, top_k, threshold, persist,
         if not j.evidence or j.evidence not in cand_text:
             continue
         sev = _severity(j.confidence)
-        conflicts.append(Conflict(str(cand["id"]), j.relation, sev, j.explanation,
-                                  j.evidence, j.confidence))
+        conflict = Conflict(str(cand["id"]), j.relation, sev, j.explanation,
+                            j.evidence, j.confidence)
         if persist:
-            await repo.insert_conflict(conn, project_id=project_id, decision_a_id=cand["id"],
-                                       subject_type=subject.subject_type,
-                                       subject_ref=subject.subject_ref, relation=j.relation,
-                                       severity=sev, explanation=j.explanation)
+            crow = await repo.insert_conflict(
+                conn, project_id=project_id, decision_a_id=cand["id"],
+                subject_type=subject.subject_type, subject_ref=subject.subject_ref,
+                relation=j.relation, severity=sev, explanation=j.explanation)
+            conflict.conflict_id = str(crow["id"])
+        conflicts.append(conflict)
     coverage = "degraded" if degraded else "full"
     if persist and conflicts:
         await append_event(conn, project_id, actor="conflict-engine",

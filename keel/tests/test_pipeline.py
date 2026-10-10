@@ -91,3 +91,25 @@ async def test_cache_avoids_second_call(conn):
     await detect(conn, pid, subj, judge=j, top_k=8, threshold=0.6, persist=False, model="m1")
     await detect(conn, pid, subj, judge=j, top_k=8, threshold=0.6, persist=False, model="m1")
     assert j.n == 1
+
+
+async def test_persisted_conflict_carries_conflict_id(conn):
+    from keel import repo
+    from keel.llm.embeddings import DeterministicEmbedder
+    from keel.conflict.pipeline import detect, Subject
+    from tests.fakes import ScriptedJudge
+    e = DeterministicEmbedder()
+    pid = await repo.upsert_project(conn, "demo")
+    person = await repo.upsert_person(conn, pid, "v", "h")
+    part = await repo.upsert_participant(conn, pid, person, "cc", "deep", "s1", [])
+    await repo.insert_decision(conn, project_id=pid, statement="orders API uses cursor pagination",
+                               rationale="r", scope_tags=["api:orders"], owner_person_id=person,
+                               source_participant_id=part, embedding=await e.embed("cursor"))
+    subj = Subject("use offset pagination for orders", ["api:orders"], await e.embed("offset"),
+                   "decision", "00000000-0000-0000-0000-0000000000aa")
+    res = await detect(conn, pid, subj, judge=ScriptedJudge(), top_k=8, threshold=0.6,
+                       persist=True, model="m1")
+    assert len(res.conflicts) == 1
+    cid = res.conflicts[0].conflict_id
+    assert cid is not None
+    assert await repo.get_conflict(conn, cid) is not None  # it's a real conflict row id
