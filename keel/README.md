@@ -1,6 +1,6 @@
 # Keel
 
-> **Name is a placeholder** ([`OPEN_QUESTIONS.md`](../context/OPEN_QUESTIONS.md) #1, unsettled). Do not harden into domains, package names, or published identifiers.
+> **Name is a placeholder** (design docs, `OPEN_QUESTIONS` #1, unsettled). Do not harden into domains, package names, or published identifiers.
 
 **The shared source of truth underneath multiplayer AI.** An open-source, vendor-neutral **intent & decision ledger** for teams and their AI agents — it captures decisions from agent sessions over MCP, detects contradictions with active decisions, and propagates changes to the sessions and people affected *before the next action*.
 
@@ -48,7 +48,7 @@ flowchart LR
   PR -- piggyback inbox --> B[Affected sessions & people]
 ```
 
-The conflict check runs **transactionally with the insert, serialized per scope tag** — concurrent records on one scope otherwise both pass and produce two contradictory active decisions. Design principles (harness-agnostic core, determinism where cheap, **fail open**, append-only hash chain) live in [`ARCHITECTURE.md`](../context/ARCHITECTURE.md) §1.
+The conflict check runs **transactionally with the insert, serialized per scope tag** — concurrent records on one scope otherwise both pass and produce two contradictory active decisions. Design principles (harness-agnostic core, determinism where cheap, **fail open**, append-only hash chain) live in the architecture doc, §1.
 
 ## MCP tools
 
@@ -111,7 +111,7 @@ keel/
 └── pyproject.toml
 ```
 
-Design docs live in [`../context/`](../context/) — [`PRD.md`](../context/PRD.md) (requirements), [`ARCHITECTURE.md`](../context/ARCHITECTURE.md) (data model, MCP contract, conflict pipeline), [`BUSINESS.md`](../context/BUSINESS.md), [`HACKATHON_PLAN.md`](../context/HACKATHON_PLAN.md), [`OPEN_QUESTIONS.md`](../context/OPEN_QUESTIONS.md).
+Design docs (`PRD`, `ARCHITECTURE`, `BUSINESS`, `HACKATHON_PLAN`, `OPEN_QUESTIONS`) are maintained alongside this repo and are not part of the published tree.
 
 ## Status & roadmap
 
@@ -123,4 +123,4 @@ AI work is going multiplayer. Live shared sessions solve collaboration *inside* 
 
 ## License
 
-Apache-2.0 **proposed** — see [`OPEN_QUESTIONS.md`](../context/OPEN_QUESTIONS.md) #10 (not yet settled; do not treat as final).
+Apache-2.0 **proposed** — see `OPEN_QUESTIONS` #10 (not yet settled; do not treat as final).
