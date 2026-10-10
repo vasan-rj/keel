@@ -87,3 +87,91 @@ async def insert_conflict(conn, *, project_id, decision_a_id, subject_type, subj
              relation, severity, explanation, status)
            VALUES ($1,$2,$3,$4,$5,$6,$7,'open') RETURNING *""",
         project_id, decision_a_id, subject_type, subject_ref, relation, severity, explanation)
+
+
+# --- Propagation: claims, dependencies, alerts, participants, conflict resolve ---
+
+async def insert_claim(conn, project_id, participant_id, scope_tags, expires_at) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO claim (project_id, participant_id, scope_tags, expires_at)
+           VALUES ($1,$2,$3,$4) RETURNING *""",
+        project_id, participant_id, scope_tags, expires_at)
+
+
+async def release_claims(conn, participant_id, scope_tags=None) -> int:
+    if scope_tags:
+        res = await conn.execute(
+            "DELETE FROM claim WHERE participant_id=$1 AND scope_tags && $2::text[]",
+            participant_id, scope_tags)
+    else:
+        res = await conn.execute("DELETE FROM claim WHERE participant_id=$1", participant_id)
+    return int(res.split()[-1])  # "DELETE <n>"
+
+
+async def participants_with_claim_overlap(conn, project_id, scope_tags) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """SELECT DISTINCT p.* FROM participant p
+           JOIN claim c ON c.participant_id = p.id
+           WHERE c.project_id=$1 AND p.status='active'
+             AND c.scope_tags && $2::text[]
+             AND (c.expires_at IS NULL OR c.expires_at > now())""",
+        project_id, scope_tags)
+
+
+async def insert_dependency(conn, decision_id, participant_id) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO dependency (decision_id, dependent_type, dependent_ref)
+           VALUES ($1,'participant',$2) RETURNING *""",
+        decision_id, str(participant_id))
+
+
+async def participants_with_dependency(conn, decision_ids: list) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """SELECT DISTINCT p.* FROM participant p
+           JOIN dependency d ON d.dependent_type='participant' AND d.dependent_ref = p.id::text
+           WHERE d.decision_id = ANY($1::uuid[])""",
+        decision_ids)
+
+
+async def participants_of_person(conn, project_id, person_id) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        "SELECT * FROM participant WHERE project_id=$1 AND person_id=$2 AND status='active'",
+        project_id, person_id)
+
+
+async def insert_alert(conn, *, project_id, target_participant_id, target_person_id,
+                       kind, ref_id) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO alert (project_id, target_participant_id, target_person_id, kind, ref_id)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *""",
+        project_id, target_participant_id, target_person_id, kind, ref_id)
+
+
+async def pending_alerts_for_participant(conn, participant_id) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """SELECT * FROM alert WHERE target_participant_id=$1 AND acknowledged_at IS NULL
+           ORDER BY id DESC""",
+        participant_id)
+
+
+async def mark_alert_delivered(conn, alert_id) -> None:
+    await conn.execute(
+        "UPDATE alert SET delivered_at=now() WHERE id=$1 AND delivered_at IS NULL", alert_id)
+
+
+async def ack_alert(conn, alert_id, participant_id) -> bool:
+    res = await conn.execute(
+        """UPDATE alert SET acknowledged_at=now()
+           WHERE id=$1 AND target_participant_id=$2 AND acknowledged_at IS NULL""",
+        alert_id, participant_id)
+    return res.split()[-1] == "1"
+
+
+async def get_conflict(conn, conflict_id) -> asyncpg.Record | None:
+    return await conn.fetchrow("SELECT * FROM conflict WHERE id=$1", conflict_id)
+
+
+async def resolve_conflict(conn, conflict_id, resolution, resolved_by) -> None:
+    await conn.execute(
+        "UPDATE conflict SET status='resolved', resolution=$2, resolved_by=$3 WHERE id=$1",
+        conflict_id, resolution, resolved_by)
