@@ -3,7 +3,10 @@ from keel.server import mcp
 
 async def test_all_tools_have_descriptions():
     tools = {t.name: t for t in await mcp.list_tools()}
-    assert set(tools) == {"register_session", "get_context", "record_decision", "check_intent"}
+    expected = {"register_session", "get_context", "record_decision", "check_intent",
+                "declare_dependency", "claim_scope", "release_scope", "list_alerts",
+                "ack_alert", "resolve_conflict"}
+    assert set(tools) == expected
     for name, t in tools.items():
         assert t.description and len(t.description.strip()) >= 20, f"{name} missing description"
 

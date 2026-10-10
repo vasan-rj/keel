@@ -15,6 +15,10 @@ from keel.tools.register_session import register_session as _register_session
 from keel.tools.get_context import get_context as _get_context
 from keel.tools.record_decision import record_decision as _record_decision
 from keel.tools.check_intent import check_intent as _check_intent
+from keel.tools.claims import declare_dependency as _declare_dependency, \
+    claim_scope as _claim_scope, release_scope as _release_scope
+from keel.tools.alerts import list_alerts as _list_alerts, ack_alert as _ack_alert
+from keel.tools.resolve_conflict import resolve_conflict as _resolve_conflict
 
 _principal_var: contextvars.ContextVar[Principal | None] = contextvars.ContextVar(
     "keel_principal", default=None
@@ -125,12 +129,86 @@ async def check_intent(planned_action: str, scope_tags: list[str]) -> dict:
                                planned_action=planned_action, scope_tags=scope_tags)
 
 
+@mcp.tool()
+async def declare_dependency(decision_id: str) -> dict:
+    """Record that this session depends on a decision, so you are alerted when it changes.
+
+    Call after get_context when your work relies on a specific decision staying as
+    it is. If that decision is later superseded or changed, you receive a `change`
+    alert in your inbox. Returns the dependency id and an `inbox`.
+    """
+    return await _declare_dependency(db.get_pool(), current_principal(), decision_id=decision_id)
+
+
+@mcp.tool()
+async def claim_scope(scope_tags: list[str], ttl_seconds: int = 3600) -> dict:
+    """Claim the scope you are actively working so new/changed decisions there alert you.
+
+    This is NOT a lock — it does not stop anyone else from working or recording
+    decisions. It only routes `change` alerts for overlapping scope to this
+    session until the claim expires (`ttl_seconds`, default 1 hour). Tags are
+    normalized server-side. Returns the claim id, normalized scope tags, and an `inbox`.
+    """
+    return await _claim_scope(db.get_pool(), current_principal(), scope_tags=scope_tags,
+                              ttl_seconds=ttl_seconds)
+
+
+@mcp.tool()
+async def release_scope(scope_tags: list[str] | None = None) -> dict:
+    """Release scope claims for this session (all, or those overlapping scope_tags).
+
+    Call when you stop working an area so you no longer receive its change alerts.
+    Omit `scope_tags` to release every claim this session holds. Returns the count
+    released and an `inbox`.
+    """
+    return await _release_scope(db.get_pool(), current_principal(), scope_tags=scope_tags)
+
+
+@mcp.tool()
+async def list_alerts() -> dict:
+    """List this session's unacknowledged alerts (conflicts and changes affecting your work).
+
+    Each alert carries a kind ("conflict" or "change"), the referenced id, and a
+    short summary of the decision or conflict. Alerts keep appearing until you
+    acknowledge them with ack_alert. Also returns the full `inbox`.
+    """
+    return await _list_alerts(db.get_pool(), current_principal())
+
+
+@mcp.tool()
+async def ack_alert(alert_id: str, note: str | None = None) -> dict:
+    """Acknowledge an alert so it stops appearing; optionally attach a note.
+
+    Only the session the alert targets can acknowledge it. Returns `acknowledged`
+    (false if the alert is not yours or already acknowledged) and an `inbox`.
+    """
+    return await _ack_alert(db.get_pool(), current_principal(), alert_id=alert_id, note=note)
+
+
+@mcp.tool()
+async def resolve_conflict(conflict_id: str, resolution: str) -> dict:
+    """Resolve a conflict on a decision you own (e.g. keep, supersede, or reject).
+
+    Owner only — the caller must own the decision the conflict was raised against,
+    otherwise this is refused. Marks the conflict resolved with your `resolution`
+    note and records who resolved it. Returns `resolved` and an `inbox`.
+    """
+    return await _resolve_conflict(db.get_pool(), current_principal(), conflict_id=conflict_id,
+                                   resolution=resolution)
+
+
 # Test-only helper: run the real auth resolution + dispatch without MCP framing.
 _HANDLERS = {
     "register_session": lambda p, a: _register_session(db.get_pool(), p, **a),
     "get_context": lambda p, a: _get_context(db.get_pool(), p, **a),
     "record_decision": lambda p, a: _record_decision(db.get_pool(), p, **a),
     "check_intent": lambda p, a: _check_intent(db.get_pool(), p, **a),
+    "declare_dependency": lambda p, a: _declare_dependency(db.get_pool(), p, **a),
+    "claim_scope": lambda p, a: _claim_scope(db.get_pool(), p, **a),
+    "release_scope": lambda p, a: _release_scope(db.get_pool(), p, **a),
+    "list_alerts": lambda p, a: _list_alerts(db.get_pool(), p),
+    "ack_alert": lambda p, a: _ack_alert(db.get_pool(), p, **a),
+    "resolve_conflict": lambda p, a: _resolve_conflict(db.get_pool(), p, **a),
 }
 
 
