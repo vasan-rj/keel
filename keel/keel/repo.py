@@ -185,3 +185,54 @@ async def resolve_conflict(conn, conflict_id, resolution, resolved_by) -> None:
     await conn.execute(
         "UPDATE conflict SET status='resolved', resolution=$2, resolved_by=$3 WHERE id=$1",
         conflict_id, resolution, resolved_by)
+
+
+# --- Handoff ---
+
+async def get_person_by_name(conn, project_id, display_name) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        "SELECT * FROM person WHERE project_id=$1 AND display_name=$2",
+        project_id, display_name)
+
+
+async def insert_handoff(conn, *, project_id, from_participant_id, to_person_id,
+                         to_participant_id, scope_tags, decision_ids, conflict_ids,
+                         note) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO handoff (project_id, from_participant_id, to_person_id,
+             to_participant_id, scope_tags, decision_ids, conflict_ids, note)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *""",
+        project_id, from_participant_id, to_person_id, to_participant_id,
+        scope_tags, decision_ids, conflict_ids, note)
+
+
+async def get_handoff(conn, handoff_id) -> asyncpg.Record | None:
+    return await conn.fetchrow("SELECT * FROM handoff WHERE id=$1", handoff_id)
+
+
+async def pending_handoffs_for_person(conn, project_id, to_person_id) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """SELECT * FROM handoff
+           WHERE project_id=$1 AND to_person_id=$2 AND status='pending'
+           ORDER BY created_at DESC""",
+        project_id, to_person_id)
+
+
+async def open_conflicts_in_scope(conn, project_id, scope_tags) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """SELECT c.* FROM conflict c
+           JOIN decision d ON d.id = c.decision_a_id
+           WHERE c.project_id=$1 AND c.status='open' AND d.scope_tags && $2::text[]
+           ORDER BY c.created_at DESC""",
+        project_id, scope_tags)
+
+
+async def set_handoff_status(conn, handoff_id, status, *, accepted_at=None,
+                             to_participant_id=None) -> None:
+    await conn.execute(
+        """UPDATE handoff
+           SET status=$2,
+               accepted_at=COALESCE($3, accepted_at),
+               to_participant_id=COALESCE($4, to_participant_id)
+           WHERE id=$1""",
+        handoff_id, status, accepted_at, to_participant_id)
