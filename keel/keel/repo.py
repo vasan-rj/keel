@@ -99,12 +99,22 @@ async def insert_claim(conn, project_id, participant_id, scope_tags, expires_at)
 
 
 async def release_claims(conn, participant_id, scope_tags=None) -> int:
+    """Release claims for a participant. With scope_tags, remove only the named tags
+    from each overlapping claim (preserving the other tags in a multi-tag claim) and
+    delete rows that become empty; returns the number of claims affected. Without
+    scope_tags, delete all the participant's claims."""
     if scope_tags:
+        # subtract the named tags from each overlapping claim (keeps coexisting tags)
         res = await conn.execute(
-            "DELETE FROM claim WHERE participant_id=$1 AND scope_tags && $2::text[]",
+            """UPDATE claim
+               SET scope_tags = ARRAY(SELECT unnest(scope_tags) EXCEPT SELECT unnest($2::text[]))
+               WHERE participant_id=$1 AND scope_tags && $2::text[]""",
             participant_id, scope_tags)
-    else:
-        res = await conn.execute("DELETE FROM claim WHERE participant_id=$1", participant_id)
+        await conn.execute(
+            "DELETE FROM claim WHERE participant_id=$1 AND scope_tags = '{}'::text[]",
+            participant_id)
+        return int(res.split()[-1])  # "UPDATE <n>" — claims touched
+    res = await conn.execute("DELETE FROM claim WHERE participant_id=$1", participant_id)
     return int(res.split()[-1])  # "DELETE <n>"
 
 

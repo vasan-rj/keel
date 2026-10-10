@@ -61,6 +61,18 @@ async def test_ack_other_participants_alert_fails(conn, db_pool):
     assert len(await repo.pending_alerts_for_participant(conn, opart)) == 1
 
 
+async def test_ack_alert_malformed_id_no_crash(conn, db_pool):
+    pid, person, part = await _ctx(conn)
+    out = await ack_alert(db_pool, Principal(pid, person, "s1"), alert_id="not-a-uuid")
+    assert out["acknowledged"] is False  # clean, not a DataError
+
+
+async def test_declare_dependency_malformed_id_errors(conn, db_pool):
+    pid, person, part = await _ctx(conn)
+    with pytest.raises(ValueError):
+        await declare_dependency(db_pool, Principal(pid, person, "s1"), decision_id="not-a-uuid")
+
+
 async def test_declare_dependency_foreign_decision_errors(conn, db_pool):
     pid, person, part = await _ctx(conn)
     other = await repo.upsert_project(conn, "other")

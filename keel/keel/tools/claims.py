@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from keel import repo
+from keel.ids import as_uuid
 from keel.scope import normalize_tags
 from keel.events import append_event
 from keel.inbox import build_inbox
@@ -18,10 +19,14 @@ async def declare_dependency(pool, principal: Principal, *, decision_id) -> dict
     async with pool.acquire() as conn:
         async with conn.transaction():
             part = await _require_participant(conn, principal)
-            d = await repo.get_decision(conn, decision_id)
+            try:
+                did = as_uuid(decision_id)
+            except ValueError:
+                raise ValueError("decision not found in this project")
+            d = await repo.get_decision(conn, did)
             if d is None or d["project_id"] != principal.project_id:
                 raise ValueError("decision not found in this project")
-            dep = await repo.insert_dependency(conn, decision_id, part["id"])
+            dep = await repo.insert_dependency(conn, did, part["id"])
             await append_event(conn, principal.project_id,
                                actor=f"person:{principal.person_id}/session:{principal.session_id}",
                                action="dependency.declared",

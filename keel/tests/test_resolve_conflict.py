@@ -42,3 +42,10 @@ async def test_missing_conflict_errors(conn, db_pool):
     with pytest.raises(LookupError):
         await resolve_conflict(db_pool, Principal(pid, owner, "s1"),
                                conflict_id=str(uuid.uuid4()), resolution="keep")
+
+
+async def test_malformed_conflict_id_errors_cleanly(conn, db_pool):
+    pid, owner, other, c = await _setup(conn)
+    with pytest.raises(LookupError):  # not an asyncpg DataError
+        await resolve_conflict(db_pool, Principal(pid, owner, "s1"),
+                               conflict_id="not-a-uuid", resolution="keep")

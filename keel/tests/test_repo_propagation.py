@@ -35,6 +35,19 @@ async def test_release_claims(conn):
     assert await repo.release_claims(conn, part) == 1  # the rest
 
 
+async def test_release_claims_preserves_other_tags_in_same_row(conn):
+    # Releasing one tag of a multi-tag claim must NOT drop coverage of the others.
+    pid, person, part = await _p(conn, "vasan", "s1")
+    future = datetime.now(timezone.utc) + timedelta(hours=1)
+    await repo.insert_claim(conn, pid, part, ["api:orders", "schema:user"], future)
+    released = await repo.release_claims(conn, part, ["api:orders"])
+    assert released == 1
+    # schema:user still claimed by this participant
+    assert [r["id"] for r in await repo.participants_with_claim_overlap(conn, pid, ["schema:user"])] == [part]
+    # api:orders no longer claimed
+    assert await repo.participants_with_claim_overlap(conn, pid, ["api:orders"]) == []
+
+
 async def test_dependency_targets(conn):
     pid, person, part = await _p(conn, "vasan", "s1")
     d = await repo.insert_decision(conn, project_id=pid, statement="x", rationale="r",

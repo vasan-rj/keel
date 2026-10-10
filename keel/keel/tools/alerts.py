@@ -1,4 +1,5 @@
 from keel import repo
+from keel.ids import as_uuid
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
@@ -22,7 +23,12 @@ async def ack_alert(pool, principal: Principal, *, alert_id, note=None) -> dict:
     async with pool.acquire() as conn:
         async with conn.transaction():
             part = await _require_participant(conn, principal)
-            ok = await repo.ack_alert(conn, alert_id, part["id"])
+            try:
+                aid = as_uuid(alert_id)
+            except ValueError:
+                ok = False
+            else:
+                ok = await repo.ack_alert(conn, aid, part["id"])
             if ok:
                 await append_event(conn, principal.project_id,
                                    actor=f"person:{principal.person_id}/session:{principal.session_id}",
