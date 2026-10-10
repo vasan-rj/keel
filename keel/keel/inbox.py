@@ -23,4 +23,16 @@ async def build_inbox(conn, principal: Principal) -> dict:
         alerts.append({"id": str(r["id"]), "kind": r["kind"], "ref_id": str(r["ref_id"]),
                        "summary": await _summary(conn, r["kind"], r["ref_id"]),
                        "created_at": r["delivered_at"].isoformat() if r["delivered_at"] else None})
-    return {"alerts": alerts, "handoffs": [], "new_lessons": []}
+    handoffs = []
+    for hr in await repo.pending_handoffs_for_person(conn, principal.project_id,
+                                                     principal.person_id):
+        handoffs.append({
+            "id": str(hr["id"]),
+            "from_participant_id": str(hr["from_participant_id"]) if hr["from_participant_id"] else None,
+            "scope_tags": list(hr["scope_tags"]),
+            "decision_ids": [str(i) for i in hr["decision_ids"]],
+            "conflict_ids": [str(i) for i in hr["conflict_ids"]],
+            "note": hr["note"],
+            "created_at": hr["created_at"].isoformat() if hr["created_at"] else None,
+        })
+    return {"alerts": alerts, "handoffs": handoffs, "new_lessons": []}
