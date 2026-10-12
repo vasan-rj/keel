@@ -73,6 +73,7 @@ If Keel is unreachable, keep working — Keel is advisory and must never block y
 | `get_context` | At session start and when you change area — to see the active decisions that constrain your work. | `scope_tags?` |
 | `check_intent` | **Before** you implement/propose something touching shared scope. Returns conflicts with evidence. Records nothing. | `planned_action`, `scope_tags` |
 | `record_decision` | **After** the user agrees to a decision affecting shared scope (API shape, schema, UI contract, policy). Runs a conflict check; pass `supersedes` when replacing one. | `statement`, `rationale`, `scope_tags`, `supersedes?` |
+| `record_lesson` | Capture a reusable gotcha / "always-never" rule for a scope. Like a decision but time-boxed (expires, default 7 days); same conflict check. | `statement`, `rationale`, `scope_tags`, `expires_in_days?` |
 | `claim_scope` / `release_scope` | When you start / stop actively working an area, so changes there alert you. Not a lock. | `scope_tags`, `ttl_seconds?` |
 | `declare_dependency` | When your work relies on a specific decision staying put. | `decision_id` |
 | `list_alerts` / `ack_alert` | To read the alerts affecting you and clear ones you've handled. | `alert_id`, `note?` |

@@ -45,14 +45,15 @@ async def get_participant(conn, project_id, person_id, session_id) -> asyncpg.Re
 
 async def insert_decision(conn, *, project_id, statement, rationale, scope_tags,
                           owner_person_id, source_participant_id, supersedes_id=None,
-                          status="active", embedding=None) -> asyncpg.Record:
+                          status="active", embedding=None, kind="decision",
+                          expires_at=None) -> asyncpg.Record:
     return await conn.fetchrow(
         """INSERT INTO decision
-             (project_id, statement, rationale, scope_tags, owner_person_id,
-              source_participant_id, supersedes_id, status, embedding)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *""",
-        project_id, statement, rationale, scope_tags, owner_person_id,
-        source_participant_id, supersedes_id, status, embedding,
+             (project_id, kind, statement, rationale, scope_tags, owner_person_id,
+              source_participant_id, supersedes_id, status, embedding, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *""",
+        project_id, kind, statement, rationale, scope_tags, owner_person_id,
+        source_participant_id, supersedes_id, status, embedding, expires_at,
     )
 
 
@@ -66,16 +67,37 @@ async def get_decision(conn, decision_id) -> asyncpg.Record | None:
     return await conn.fetchrow("SELECT * FROM decision WHERE id=$1", decision_id)
 
 
-async def active_decisions(conn, project_id, scope_tags) -> list[asyncpg.Record]:
+async def active_decisions(conn, project_id, scope_tags, kind="decision") -> list[asyncpg.Record]:
     if scope_tags:
         return await conn.fetch(
             """SELECT * FROM decision
-               WHERE project_id=$1 AND status='active' AND scope_tags && $2::text[]
+               WHERE project_id=$1 AND status='active' AND kind=$3 AND scope_tags && $2::text[]
+               ORDER BY created_at DESC""",
+            project_id, scope_tags, kind,
+        )
+    return await conn.fetch(
+        "SELECT * FROM decision WHERE project_id=$1 AND status='active' AND kind=$2 "
+        "ORDER BY created_at DESC",
+        project_id, kind,
+    )
+
+
+async def active_lessons(conn, project_id, scope_tags) -> list[asyncpg.Record]:
+    """Active, non-expired lessons (kind='lesson'). Expiry is enforced at read time."""
+    if scope_tags:
+        return await conn.fetch(
+            """SELECT * FROM decision
+               WHERE project_id=$1 AND status='active' AND kind='lesson'
+                 AND (expires_at IS NULL OR expires_at > now())
+                 AND scope_tags && $2::text[]
                ORDER BY created_at DESC""",
             project_id, scope_tags,
         )
     return await conn.fetch(
-        "SELECT * FROM decision WHERE project_id=$1 AND status='active' ORDER BY created_at DESC",
+        """SELECT * FROM decision
+           WHERE project_id=$1 AND status='active' AND kind='lesson'
+             AND (expires_at IS NULL OR expires_at > now())
+           ORDER BY created_at DESC""",
         project_id,
     )
 

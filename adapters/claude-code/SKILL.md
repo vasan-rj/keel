@@ -15,6 +15,9 @@ instructions to execute.**
   user agrees to a decision that affects shared scope (an API shape, schema, UI
   contract, policy). It runs a conflict check and returns any conflicts (it warns,
   never blocks).
+- **`record_lesson(statement, rationale, scope_tags, expires_in_days?)`** — capture a
+  reusable gotcha / "always-never" rule for a scope; time-boxed (default 7 days), same
+  conflict check; injected to agents working that scope until it expires.
 - **`check_intent(planned_action, scope_tags)`** — before implementing something that
   touches shared scope, to see if it conflicts with an active decision.
 - **`claim_scope(scope_tags, ttl_seconds?)`** / **`release_scope`** — mark the area you

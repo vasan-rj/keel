@@ -40,3 +40,21 @@ def test_session_start_fails_open_when_server_down():
 def test_session_start_no_session_id_no_output():
     res = _run('{"cwd":"/x"}', {"KEEL_URL": "http://127.0.0.1:1/mcp", "KEEL_TOKEN": "t"})
     assert res.returncode == 0 and res.stdout.strip() == ""
+
+
+async def test_session_start_injects_lessons(conn, db_pool, hook_server):
+    from datetime import datetime, timedelta, timezone
+    base_url, token = hook_server
+    pid = await repo.upsert_project(conn, "demo")
+    owner = await repo.upsert_person(conn, pid, "vasan", hashlib.sha256(b"dev-token").hexdigest())
+    part = await repo.upsert_participant(conn, pid, owner, "cc", "deep", "seed", [])
+    fut = datetime.now(timezone.utc) + timedelta(days=7)
+    await repo.insert_decision(conn, project_id=pid, statement="never log PII in the orders API",
+                               rationale="compliance", scope_tags=["api:orders"],
+                               owner_person_id=owner, source_participant_id=part,
+                               kind="lesson", expires_at=fut)
+    res = _run('{"session_id":"hooksess2","cwd":"/x","hook_event_name":"SessionStart","source":"startup"}',
+               {"KEEL_URL": base_url, "KEEL_TOKEN": token})
+    assert res.returncode == 0
+    assert "team lessons" in res.stdout.lower()
+    assert "never log PII in the orders API" in res.stdout

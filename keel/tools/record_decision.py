@@ -19,11 +19,21 @@ def _scope_lock_key(project_id, tag: str) -> int:
 
 async def record_decision(pool, principal: Principal, *, statement, rationale,
                           scope_tags, supersedes=None) -> dict:
+    """Record a decision (kind='decision'). Thin wrapper over the shared core."""
+    return await _record(pool, principal, statement=statement, rationale=rationale,
+                         scope_tags=scope_tags, kind="decision", supersedes=supersedes)
+
+
+async def _record(pool, principal: Principal, *, statement, rationale, scope_tags,
+                  kind="decision", supersedes=None, expires_at=None) -> dict:
+    """Shared record path for decisions and lessons (same conflict pipeline,
+    propagation, and event chain). `kind` is 'decision' or 'lesson'; `expires_at`
+    sets a lesson's expiry."""
     try:
         embedding = await get_embedder().embed(f"{statement}\n{rationale}")
         embed_degraded = False
     except Exception as exc:
-        log.warning("embedding failed; recording decision without embedding: %s", exc)
+        log.warning("embedding failed; recording %s without embedding: %s", kind, exc)
         embedding = None
         embed_degraded = True
     async with pool.acquire() as conn:
@@ -52,7 +62,7 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
                 conn, project_id=principal.project_id, statement=statement,
                 rationale=rationale, scope_tags=tags, owner_person_id=principal.person_id,
                 source_participant_id=participant["id"], supersedes_id=supersedes_id,
-                status="active", embedding=embedding,
+                status="active", embedding=embedding, kind=kind, expires_at=expires_at,
             )
             if supersedes_id:
                 await repo.mark_superseded(conn, supersedes_id)
@@ -74,14 +84,16 @@ async def record_decision(pool, principal: Principal, *, statement, rationale,
             await append_event(
                 conn, principal.project_id,
                 actor=f"person:{principal.person_id}/session:{principal.session_id}",
-                action="decision.recorded",
-                payload={"decision_id": str(row["id"]), "scope_tags": tags,
+                action=f"{kind}.recorded",
+                payload={"decision_id": str(row["id"]), "kind": kind, "scope_tags": tags,
                          "supersedes": str(supersedes_id) if supersedes_id else None},
             )
             box = await build_inbox(conn, principal)
 
     degraded = result["degraded"] or embed_degraded
     coverage = "degraded" if embed_degraded else result["coverage"]
-    return {"decision_id": str(row["id"]), "status": row["status"],
+    return {"decision_id": str(row["id"]), "kind": kind, "status": row["status"],
             "scope_tags": tags, "conflicts": result["conflicts"], "degraded": degraded,
-            "coverage": coverage, "inbox": box}
+            "coverage": coverage,
+            "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+            "inbox": box}

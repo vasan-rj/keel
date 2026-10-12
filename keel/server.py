@@ -26,6 +26,7 @@ from keel.tools.handoff import create_handoff as _create_handoff, \
 from keel.tools.report_activity import report_activity as _report_activity
 from keel.tools.outcomes import record_outcome as _record_outcome, rate_alert as _rate_alert
 from keel.tools.decision_request import request_decision as _request_decision
+from keel.tools.lessons import record_lesson as _record_lesson
 
 _principal_var: contextvars.ContextVar[Principal | None] = contextvars.ContextVar(
     "keel_principal", default=None
@@ -408,6 +409,22 @@ async def request_decision(question: str, owner_person: str, options: list[str] 
                                    owner_person=owner_person, options=options, scope_tags=scope_tags)
 
 
+@mcp.tool()
+async def record_lesson(statement: str, rationale: str, scope_tags: list[str],
+                        expires_in_days: int = 7) -> dict:
+    """Record a reusable lesson — a gotcha or rule the team learned the hard way.
+
+    A lesson is like a decision but time-boxed: it governs the given `scope_tags`,
+    runs the same conflict check against active decisions/lessons, and is surfaced to
+    agents working that scope (via get_context and the inbox) until it expires
+    (`expires_in_days`, default 7). Use it for "always/never do X here" guidance that
+    should fade unless renewed. Returns the lesson id, expiry, conflicts, and an `inbox`.
+    """
+    return await _record_lesson(db.get_pool(), current_principal(), statement=statement,
+                                rationale=rationale, scope_tags=scope_tags,
+                                expires_in_days=expires_in_days)
+
+
 # Test-only helper: run the real auth resolution + dispatch without MCP framing.
 _HANDLERS = {
     "register_session": lambda p, a: _register_session(db.get_pool(), p, **a),
@@ -427,6 +444,7 @@ _HANDLERS = {
     "record_outcome": lambda p, a: _record_outcome(db.get_pool(), p, **a),
     "rate_alert": lambda p, a: _rate_alert(db.get_pool(), p, **a),
     "request_decision": lambda p, a: _request_decision(db.get_pool(), p, **a),
+    "record_lesson": lambda p, a: _record_lesson(db.get_pool(), p, **a),
 }
 
 

@@ -38,4 +38,11 @@ async def build_inbox(conn, principal: Principal) -> dict:
             "note": hr["note"],
             "created_at": hr["created_at"].isoformat() if hr["created_at"] else None,
         })
-    return {"alerts": alerts, "handoffs": handoffs, "new_lessons": []}
+    new_lessons = []
+    for lr in await repo.active_lessons(conn, principal.project_id, None):
+        new_lessons.append({
+            "id": str(lr["id"]), "statement": lr["statement"],
+            "scope_tags": list(lr["scope_tags"]),
+            "expires_at": lr["expires_at"].isoformat() if lr["expires_at"] else None,
+        })
+    return {"alerts": alerts, "handoffs": handoffs, "new_lessons": new_lessons}
