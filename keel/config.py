@@ -14,6 +14,7 @@ class Settings:
     llm_timeout_s: float = 20.0
     judgment_cache: bool = True
     rrf_k: int = 60
+    scope_fuzzy_threshold: float = 0.8
 
 
 # Dev default points at the docker-compose db (host port 5433). Override with
@@ -33,4 +34,5 @@ def get_settings() -> Settings:
         llm_timeout_s=float(os.environ.get("KEEL_LLM_TIMEOUT_S", "20")),
         judgment_cache=os.environ.get("KEEL_JUDGMENT_CACHE", "on") != "off",
         rrf_k=int(os.environ.get("KEEL_RRF_K", "60")),
+        scope_fuzzy_threshold=float(os.environ.get("KEEL_SCOPE_FUZZY_THRESHOLD", "0.8")),
     )
