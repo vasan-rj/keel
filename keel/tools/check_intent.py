@@ -20,7 +20,7 @@ async def check_intent(pool, principal: Principal, *, planned_action, scope_tags
             res = await detect(conn, principal.project_id, subject, judge=get_judge(s),
                                top_k=s.conflict_topk, threshold=s.conflict_threshold, persist=False,
                                model=(None if s.llm_provider == "none" else s.llm_model),
-                               rrf_k=s.rrf_k, use_cache=s.judgment_cache)
+                               rrf_k=s.rrf_k, use_cache=s.judgment_cache, settings=s)
             out = {"conflicts": [c.__dict__ for c in res.conflicts], "degraded": res.degraded,
                    "coverage": res.coverage}
         except Exception as exc:

@@ -18,7 +18,7 @@ class Judgment(BaseModel):
 
 
 class Judge(Protocol):
-    async def judge(self, subject_text: str, candidate: dict) -> Judgment: ...
+    async def judge(self, subject_text: str, candidate: dict, *, model=None) -> Judgment: ...
 
 
 _SYSTEM = (
@@ -29,8 +29,28 @@ _SYSTEM = (
 )
 
 
-def select_model(subject_text, candidate, settings) -> str:
-    return settings.llm_model  # router seam (next slice)
+# cue words that signal a substantive, high-stakes change worth the strong model
+_CUE_WORDS = ("instead", "replace", "deprecat", "migrat", "switch", "no longer",
+              "must never", "stop using", "remove", "rewrite", "break")
+
+
+def select_model(subject_text, candidate_text, scope_tags, settings) -> str:
+    """Route a judgment to the cheap or strong model by a deterministic heuristic.
+
+    Opt-in: with no `llm_model_cheap` configured, always returns `llm_model` (routing
+    off). Otherwise a judgment is 'complex' (-> strong `llm_model`) when the combined
+    text is long, it spans many scope tags, or it contains a change cue word; else
+    'simple' (-> `llm_model_cheap`)."""
+    cheap = getattr(settings, "llm_model_cheap", None)
+    if not cheap:
+        return settings.llm_model
+    text = f"{subject_text} {candidate_text}".lower()
+    complex_ = (
+        len(subject_text) + len(candidate_text) > settings.router_complexity_chars
+        or len(scope_tags or []) > 2
+        or any(w in text for w in _CUE_WORDS)
+    )
+    return settings.llm_model if complex_ else cheap
 
 
 class LLMJudge:
@@ -51,9 +71,12 @@ class LLMJudge:
         # bind it onto the underlying acompletion call.
         return await client.create(response_model=Judgment, model=model, **kwargs)
 
-    async def judge(self, subject_text, candidate) -> Judgment:
+    async def judge(self, subject_text, candidate, *, model=None) -> Judgment:
         from keel.config import get_settings
-        model = self._select(subject_text, candidate, get_settings())
+        if model is None:  # back-compat for direct callers (e.g. the live test)
+            cand_text = f"{candidate['statement']}\n{candidate.get('rationale') or ''}"
+            model = self._select(subject_text, cand_text, candidate.get("scope_tags") or [],
+                                 get_settings())
         create = self._create or (lambda **k: self._default_create(model=model, **k))
         return await asyncio.wait_for(
             create(messages=self.build_messages(subject_text, candidate)), timeout=self.timeout_s)

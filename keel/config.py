@@ -7,6 +7,8 @@ class Settings:
     database_url: str
     llm_provider: str = "anthropic"
     llm_model: str = "anthropic/claude-sonnet-5-5"
+    llm_model_cheap: str | None = None
+    router_complexity_chars: int = 600
     embedding_provider: str = "deterministic"
     embedding_model: str | None = None
     embedding_dim: int = 1536
@@ -28,6 +30,8 @@ def get_settings() -> Settings:
         database_url=os.environ.get("DATABASE_URL", _DEFAULT_DATABASE_URL),
         llm_provider=os.environ.get("KEEL_LLM_PROVIDER", "anthropic"),
         llm_model=os.environ.get("KEEL_LLM_MODEL", "anthropic/claude-sonnet-5-5"),
+        llm_model_cheap=os.environ.get("KEEL_LLM_MODEL_CHEAP") or None,
+        router_complexity_chars=int(os.environ.get("KEEL_ROUTER_COMPLEXITY_CHARS", "600")),
         embedding_provider=os.environ.get("KEEL_EMBEDDING_PROVIDER", "deterministic"),
         embedding_model=os.environ.get("KEEL_EMBEDDING_MODEL"),
         embedding_dim=int(os.environ.get("KEEL_EMBEDDING_DIM", "1536")),

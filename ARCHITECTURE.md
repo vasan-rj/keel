@@ -114,6 +114,12 @@ The judge uses litellm + instructor, so the model is a config switch
 - Also Anthropic, OpenAI, and OpenAI-compatible endpoints. `none` disables detection
   (used by the test suite). Embeddings default to a deterministic offline embedder
   (retrieval still works via FTS + pgvector), so there is no provider dimension coupling.
+- **Model router (optional).** Set `KEEL_LLM_MODEL_CHEAP` to route each candidate
+  judgment to a cheap model, escalating to `KEEL_LLM_MODEL` only when it looks
+  substantive — long combined text (> `KEEL_ROUTER_COMPLEXITY_CHARS`, default 600),
+  more than two scope tags, or a change cue word (`replace`, `migrate`, `deprecate`,
+  `switch`, …). Heuristic and deterministic, so the judgment cache keys on the routed
+  model. Unset → routing off (always `KEEL_LLM_MODEL`).
 
 ## Claude Code adapter (adapters/claude-code/)
 Fail-open bash hooks that curl the MCP endpoint:

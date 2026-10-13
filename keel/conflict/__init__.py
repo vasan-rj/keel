@@ -17,6 +17,6 @@ async def check_on_insert(conn, project_id, decision_row, *, judge=None,
                        threshold=threshold if threshold is not None else s.conflict_threshold,
                        persist=True,
                        model=(None if s.llm_provider == "none" else s.llm_model), rrf_k=s.rrf_k,
-                       use_cache=s.judgment_cache)
+                       use_cache=s.judgment_cache, settings=s)
     return {"conflicts": [c.__dict__ for c in res.conflicts],
             "degraded": res.degraded, "coverage": res.coverage}

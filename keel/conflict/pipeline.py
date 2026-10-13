@@ -5,6 +5,7 @@ from keel import repo
 from keel.events import append_event
 from keel.conflict.retrieval import candidates
 from keel.conflict.cache import cache_key, get_cached, put_cached
+from keel.conflict.judge import select_model
 
 log = logging.getLogger("keel.conflict")
 _HARD = {"contradicts", "duplicates", "supersedes"}
@@ -32,28 +33,31 @@ def _severity(c: float) -> str:
 
 
 async def detect(conn, project_id, subject, *, judge, top_k, threshold, persist,
-                 model=None, use_cache=True, rrf_k=60) -> DetectionResult:
+                 model=None, use_cache=True, rrf_k=60, settings=None) -> DetectionResult:
     if judge is None:
         return DetectionResult([], False, "disabled")
     exclude = subject.subject_ref if subject.subject_type == "decision" else None
     rows = await candidates(conn, project_id, subject.scope_tags, subject.embedding,
                             subject.text, top_k, exclude_decision_id=exclude, rrf_k=rrf_k)
-    model = model or "default"
     conflicts, degraded = [], False
     for cand in rows:
         candidate = {"statement": cand["statement"], "rationale": cand["rationale"]}
         cand_text = f"{candidate['statement']}\n{candidate['rationale'] or ''}"
-        key = cache_key(model, subject.text, cand_text) if use_cache else None
+        # route per candidate; the cache key uses the ROUTED model so routing can't
+        # collide across models. settings=None -> legacy `model` param (routing off).
+        routed = (select_model(subject.text, cand_text, subject.scope_tags, settings)
+                  if settings is not None else (model or "default"))
+        key = cache_key(routed, subject.text, cand_text) if use_cache else None
         j = await get_cached(conn, key) if key else None
         if j is None:
             try:
-                j = await judge.judge(subject.text, candidate)
+                j = await judge.judge(subject.text, candidate, model=routed)
             except Exception as e:  # fail open: skip this candidate
                 log.warning("judge failed for candidate %s: %s", cand["id"], e)
                 degraded = True
                 continue
             if key:
-                await put_cached(conn, key, model, j)
+                await put_cached(conn, key, routed, j)
         if j.relation not in _HARD or j.confidence < threshold:
             continue
         if not j.evidence or j.evidence not in cand_text:
