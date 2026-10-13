@@ -36,6 +36,21 @@ first boot by `ensure_schema`.
   (`firebase init hosting && firebase deploy`) or any static host; it calls `<URL>/api/*`
   with the token (CORS is `*` by default; lock it with `KEEL_CORS_ORIGINS`).
 
+## Semantic embeddings (optional)
+By default embeddings are deterministic/offline (retrieval still works via Postgres FTS +
+pgvector). For semantic recall, point the embedder at a **1536-dim-capable** model so it
+fits the `vector(1536)` column:
+```
+KEEL_EMBEDDING_PROVIDER=gemini  KEEL_EMBEDDING_MODEL=gemini/gemini-embedding-001  KEEL_EMBEDDING_DIM=1536
+# or:  KEEL_EMBEDDING_PROVIDER=openai  KEEL_EMBEDDING_MODEL=openai/text-embedding-3-small
+```
+`dimensions` is requested from the provider (litellm maps it to Gemini's
+`output_dimensionality`). After switching a live deployment from deterministic, re-embed
+existing rows once so the vector space isn't mixed:
+```
+python -m keel.scripts.reembed
+```
+
 ## Vertex AI / Gemma variant
 Prefer Vertex (no API key; uses the service account):
 ```

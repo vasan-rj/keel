@@ -1,23 +1,60 @@
 import pytest
-from pgvector import Vector
-from keel.llm.embeddings import DeterministicEmbedder, ProviderEmbedder, get_embedder
+from keel import repo
+from keel.llm.embeddings import ProviderEmbedder, DeterministicEmbedder, get_embedder
+from keel.config import get_settings
 
 
-async def test_deterministic_stable_1536():
-    e = DeterministicEmbedder(); a = await e.embed("cursor"); b = await e.embed("cursor")
-    assert isinstance(a, Vector) and len(a.to_list()) == 1536 and a.to_list() == b.to_list()
+async def test_provider_embedder_forwards_dimensions(monkeypatch):
+    captured = {}
 
-async def test_deterministic_differs():
-    e = DeterministicEmbedder()
-    assert (await e.embed("cursor")).to_list() != (await e.embed("offset")).to_list()
+    async def fake_aembedding(model, input, dimensions=None, **kw):
+        from types import SimpleNamespace
+        captured["model"] = model
+        captured["dimensions"] = dimensions
+        return SimpleNamespace(data=[{"embedding": [0.01] * dimensions}])
 
-async def test_default_deterministic():
-    assert isinstance(get_embedder(), DeterministicEmbedder)
+    import litellm
+    monkeypatch.setattr(litellm, "aembedding", fake_aembedding)
+    e = ProviderEmbedder(model="gemini/gemini-embedding-001", dim=1536)
+    vec = await e.embed("hello")
+    assert captured["model"] == "gemini/gemini-embedding-001"
+    assert captured["dimensions"] == 1536
+    assert len(vec.to_list()) == 1536
 
-def test_provider_requires_model():
-    with pytest.raises(ValueError): ProviderEmbedder(model="")
 
-async def test_provider_wrong_dim():
-    async def fake(_): return [0.0, 1.0]
+async def test_provider_embedder_dim_mismatch_raises():
+    async def fake(text):
+        return [0.1] * 8
+    e = ProviderEmbedder(model="m", aembed=fake, dim=16)
     with pytest.raises(ValueError):
-        await ProviderEmbedder(model="openai/text-embedding-3-small", aembed=fake).embed("x")
+        await e.embed("x")
+
+
+def test_get_embedder_selects_provider_and_dim(monkeypatch):
+    monkeypatch.setenv("KEEL_EMBEDDING_PROVIDER", "gemini")
+    monkeypatch.setenv("KEEL_EMBEDDING_MODEL", "gemini/gemini-embedding-001")
+    monkeypatch.setenv("KEEL_EMBEDDING_DIM", "1536")
+    e = get_embedder(get_settings())
+    assert isinstance(e, ProviderEmbedder)
+    assert e.model == "gemini/gemini-embedding-001" and e.dim == 1536
+
+
+def test_get_embedder_deterministic_default(monkeypatch):
+    monkeypatch.setenv("KEEL_EMBEDDING_PROVIDER", "deterministic")
+    assert isinstance(get_embedder(get_settings()), DeterministicEmbedder)
+
+
+async def test_reembed_backfills_null_embeddings(conn, db_pool):
+    from keel.scripts.reembed import reembed
+    pid = await repo.upsert_project(conn, "demo")
+    person = await repo.upsert_person(conn, pid, "vasan", "h")
+    part = await repo.upsert_participant(conn, pid, person, "cc", "deep", "s1", [])
+    # a decision stored WITHOUT an embedding (e.g. recorded while the embedder was down)
+    d = await repo.insert_decision(conn, project_id=pid, statement="orders use cursor pagination",
+                                   rationale="scales", scope_tags=["api:orders"],
+                                   owner_person_id=person, source_participant_id=part,
+                                   embedding=None)
+    assert (await repo.get_decision(conn, d["id"]))["embedding"] is None
+    n = await reembed(db_pool, project_id=pid, embedder=DeterministicEmbedder())
+    assert n == 1
+    assert (await repo.get_decision(conn, d["id"]))["embedding"] is not None

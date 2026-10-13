@@ -58,7 +58,10 @@ class ProviderEmbedder:
             return await self._aembed(text)
         import litellm  # lazy: optional [llm] extra
 
-        resp = await litellm.aembedding(model=self.model, input=[text])
+        # request `dim` output dimensions so configurable models (OpenAI text-embedding-3-*,
+        # Gemini gemini-embedding-001) fit the vector(1536) column. litellm maps
+        # `dimensions` to each provider's param (e.g. Gemini output_dimensionality).
+        resp = await litellm.aembedding(model=self.model, input=[text], dimensions=self.dim)
         return list(resp.data[0]["embedding"])
 
     async def embed(self, text: str) -> Vector:
@@ -74,4 +77,4 @@ def get_embedder(settings: Optional[Settings] = None) -> Embedder:
     settings = settings or get_settings()
     if settings.embedding_provider == "deterministic":
         return DeterministicEmbedder()
-    return ProviderEmbedder(model=settings.embedding_model or "")
+    return ProviderEmbedder(model=settings.embedding_model or "", dim=settings.embedding_dim)

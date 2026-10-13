@@ -67,6 +67,20 @@ async def get_decision(conn, decision_id) -> asyncpg.Record | None:
     return await conn.fetchrow("SELECT * FROM decision WHERE id=$1", decision_id)
 
 
+async def active_records_for_reembed(conn, project_id=None) -> list[asyncpg.Record]:
+    """Active decisions + lessons (id, statement, rationale) to re-embed."""
+    if project_id is not None:
+        return await conn.fetch(
+            "SELECT id, statement, rationale FROM decision "
+            "WHERE status='active' AND project_id=$1", project_id)
+    return await conn.fetch(
+        "SELECT id, statement, rationale FROM decision WHERE status='active'")
+
+
+async def update_embedding(conn, decision_id, embedding) -> None:
+    await conn.execute("UPDATE decision SET embedding=$2 WHERE id=$1", decision_id, embedding)
+
+
 async def active_decisions(conn, project_id, scope_tags, kind="decision") -> list[asyncpg.Record]:
     if scope_tags:
         return await conn.fetch(

@@ -9,6 +9,7 @@ class Settings:
     llm_model: str = "anthropic/claude-sonnet-5-5"
     embedding_provider: str = "deterministic"
     embedding_model: str | None = None
+    embedding_dim: int = 1536
     conflict_threshold: float = 0.6
     conflict_topk: int = 8
     llm_timeout_s: float = 20.0
@@ -29,6 +30,7 @@ def get_settings() -> Settings:
         llm_model=os.environ.get("KEEL_LLM_MODEL", "anthropic/claude-sonnet-5-5"),
         embedding_provider=os.environ.get("KEEL_EMBEDDING_PROVIDER", "deterministic"),
         embedding_model=os.environ.get("KEEL_EMBEDDING_MODEL"),
+        embedding_dim=int(os.environ.get("KEEL_EMBEDDING_DIM", "1536")),
         conflict_threshold=float(os.environ.get("KEEL_CONFLICT_CONFIDENCE_THRESHOLD", "0.6")),
         conflict_topk=int(os.environ.get("KEEL_CONFLICT_TOPK", "8")),
         llm_timeout_s=float(os.environ.get("KEEL_LLM_TIMEOUT_S", "20")),
