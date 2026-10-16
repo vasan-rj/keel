@@ -65,6 +65,38 @@ async def test_events_limit_and_shape(db_pool):
     assert isinstance(e["payload"], dict)
 
 
+async def test_events_pagination(db_pool):
+    pid = await _seed(db_pool)
+    from keel.events import append_event
+    async with db_pool.acquire() as conn:
+        for i in range(4):
+            await append_event(conn, pid, actor="tester", action=f"evt.{i}", payload={"i": i})
+
+    async with _client() as c:
+        r1 = await c.get("/api/events?limit=2",
+                         headers={"Authorization": "Bearer dev-token", "X-Keel-Session": "s1"})
+        assert r1.status_code == 200
+        data1 = r1.json()
+        assert len(data1["events"]) == 2
+        assert data1["next_cursor"] == data1["events"][-1]["id"]
+
+        r2 = await c.get(f"/api/events?limit=2&before_id={data1['next_cursor']}",
+                         headers={"Authorization": "Bearer dev-token", "X-Keel-Session": "s1"})
+        assert r2.status_code == 200
+        data2 = r2.json()
+        assert len(data2["events"]) == 2
+        assert data2["events"][0]["id"] < data1["events"][-1]["id"]
+
+        r_alias = await c.get(f"/api/events?limit=2&cursor={data1['next_cursor']}",
+                              headers={"Authorization": "Bearer dev-token", "X-Keel-Session": "s1"})
+        assert r_alias.status_code == 200
+        assert r_alias.json()["events"] == data2["events"]
+
+        r_bad = await c.get("/api/events?before_id=invalid",
+                            headers={"Authorization": "Bearer dev-token", "X-Keel-Session": "s1"})
+        assert r_bad.status_code == 400
+
+
 async def test_cors_preflight_no_auth(db_pool):
     await _seed(db_pool)
     async with _client() as c:

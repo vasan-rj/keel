@@ -250,7 +250,11 @@ async def set_handoff_status(conn, handoff_id, status, *, accepted_at=None,
 
 # --- Dashboard reads (read-only) ---
 
-async def list_events(conn, project_id, limit) -> list[asyncpg.Record]:
+async def list_events(conn, project_id, limit: int, before_id: int | None = None) -> list[asyncpg.Record]:
+    if before_id is not None:
+        return await conn.fetch(
+            "SELECT * FROM event WHERE project_id=$1 AND id < $2 ORDER BY id DESC LIMIT $3",
+            project_id, before_id, limit)
     return await conn.fetch(
         "SELECT * FROM event WHERE project_id=$1 ORDER BY id DESC LIMIT $2",
         project_id, limit)

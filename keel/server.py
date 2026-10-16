@@ -117,10 +117,27 @@ async def api_events(request):
     except ValueError:
         limit = 100
     limit = max(1, min(limit, 500))
+
+    raw_cursor = request.query_params.get("before_id") or request.query_params.get("cursor")
+    before_id = None
+    if raw_cursor:
+        try:
+            val = int(raw_cursor)
+            if val > 0:
+                before_id = val
+            else:
+                return JSONResponse({"error": "invalid cursor parameter"}, status_code=400)
+        except ValueError:
+            return JSONResponse({"error": "invalid cursor parameter"}, status_code=400)
+
     pool = db.get_pool()
     async with pool.acquire() as conn:
-        rows = await repo.list_events(conn, p.project_id, limit)
-    return JSONResponse({"events": [_row_event(r) for r in rows]})
+        rows = await repo.list_events(conn, p.project_id, limit, before_id=before_id)
+    next_cursor = rows[-1]["id"] if rows and len(rows) == limit else None
+    return JSONResponse({
+        "events": [_row_event(r) for r in rows],
+        "next_cursor": next_cursor,
+    })
 
 
 async def _resolve_principal(token: str, session_id: str | None) -> Principal | None:

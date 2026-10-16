@@ -11,6 +11,7 @@
     header input { background:#0b0d11; color:var(--fg); border:1px solid #2a2f3a; border-radius:6px; padding:6px 8px; }
     header input#url { width:240px; } header input#token { width:200px; }
     button { background:var(--acc); color:#06101f; border:0; border-radius:6px; padding:6px 12px; cursor:pointer; }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
     #msg { color:var(--mut); margin-left:auto; }
     main { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:16px; }
     .wide { grid-column:1 / -1; }
@@ -32,7 +33,13 @@
     <span id="msg">not connected</span>
   </header>
   <main>
-    <section class="card wide"><h2>Event timeline</h2><div id="events"></div></section>
+    <section class="card wide">
+      <h2>Event timeline</h2>
+      <div id="events"></div>
+      <div style="margin-top:10px; text-align:center;">
+        <button id="events-more" style="display:none;">Load more</button>
+      </div>
+    </section>
     <section class="card"><h2>Active decisions</h2><div id="decisions"></div></section>
     <section class="card"><h2>Open conflicts</h2><div id="conflicts"></div></section>
     <section class="card"><h2>Pending alerts</h2><div id="alerts"></div></section>

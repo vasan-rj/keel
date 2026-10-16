@@ -1,6 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
+let eventsList = [];
+let hasMoreEvents = false;
+
 function restore() {
   $("url").value = localStorage.getItem("keel_url") || "http://localhost:8000";
   $("token").value = localStorage.getItem("keel_token") || "";
@@ -21,7 +24,63 @@ function rows(el, items, fn) {
                              : `<div class="row mut">none</div>`;
 }
 
-async function refresh() {
+function renderEvents() {
+  rows($("events"), eventsList, (e) =>
+    `<span class="mut">${esc(e.created_at || "")}</span> <code>${esc(e.action)}</code> `
+    + `<span class="mut">by ${esc(e.actor)}</span>`);
+
+  const moreBtn = $("events-more");
+  if (!moreBtn) return;
+  if (!eventsList.length || !hasMoreEvents) {
+    moreBtn.style.display = "none";
+  } else {
+    moreBtn.style.display = "inline-block";
+    moreBtn.disabled = false;
+    moreBtn.textContent = "Load more";
+  }
+}
+
+function mergeEvents(incoming) {
+  const map = new Map();
+  for (const e of eventsList) map.set(e.id, e);
+  for (const e of incoming) map.set(e.id, e);
+  eventsList = Array.from(map.values()).sort((a, b) => b.id - a.id);
+}
+
+async function loadMore() {
+  const moreBtn = $("events-more");
+  if (!eventsList.length || !moreBtn) return;
+  const oldestId = eventsList[eventsList.length - 1].id;
+  moreBtn.disabled = true;
+  moreBtn.textContent = "Loading...";
+  try {
+    const data = await api(`/api/events?limit=100&before_id=${oldestId}`);
+    const items = data.events || [];
+    if (!items.length) {
+      hasMoreEvents = false;
+      moreBtn.textContent = "No more events";
+      moreBtn.disabled = true;
+      return;
+    }
+    mergeEvents(items);
+    if (items.length < 100 || data.next_cursor === null) {
+      hasMoreEvents = false;
+      moreBtn.textContent = "No more events";
+      moreBtn.disabled = true;
+    } else {
+      hasMoreEvents = true;
+      moreBtn.textContent = "Load more";
+      moreBtn.disabled = false;
+    }
+    renderEvents();
+  } catch (err) {
+    moreBtn.disabled = false;
+    moreBtn.textContent = "Load more";
+    $("msg").textContent = "error loading more: " + err.message;
+  }
+}
+
+async function refresh(reset = false) {
   try {
     localStorage.setItem("keel_url", $("url").value);
     localStorage.setItem("keel_token", $("token").value);
@@ -35,9 +94,14 @@ async function refresh() {
       `<span class="pill">${esc(a.kind)}</span> ${esc(a.ref_id)}`);
     rows($("handoffs"), state.pending_handoffs, (h) =>
       `→ ${esc(h.note || "")} <span class="tag">[${esc((h.scope_tags || []).join(", "))}]</span>`);
-    rows($("events"), ev.events, (e) =>
-      `<span class="mut">${esc(e.created_at || "")}</span> <code>${esc(e.action)}</code> `
-      + `<span class="mut">by ${esc(e.actor)}</span>`);
+
+    if (reset || eventsList.length === 0) {
+      eventsList = ev.events || [];
+      hasMoreEvents = Boolean(ev.events && ev.events.length >= 100);
+    } else {
+      mergeEvents(ev.events || []);
+    }
+    renderEvents();
     $("msg").textContent = "updated " + new Date().toLocaleTimeString();
   } catch (err) {
     $("msg").textContent = "error: " + err.message;
@@ -45,10 +109,16 @@ async function refresh() {
 }
 
 let timer = null;
-$("go").onclick = refresh;
+$("go").onclick = () => {
+  eventsList = [];
+  refresh(true);
+};
+if ($("events-more")) $("events-more").onclick = loadMore;
+
 $("auto").onchange = (e) => {
   clearInterval(timer);
   if (e.target.checked) timer = setInterval(refresh, 5000);
 };
+
 restore();
-if ($("token").value) refresh();
+if ($("token").value) refresh(true);
