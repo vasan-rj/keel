@@ -7,7 +7,7 @@ from keel.conflict.retrieval import candidates
 from keel.conflict.cache import cache_key, get_cached, put_cached
 
 log = logging.getLogger("keel.conflict")
-_HARD = {"contradicts", "duplicates", "supersedes"}
+_HARD = {"contradicts", "supersedes"}
 
 
 @dataclass

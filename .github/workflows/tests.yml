@@ -1,0 +1,45 @@
+name: Tests
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U keel -d keel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      KEEL_TEST_DATABASE_URL: postgresql://keel:keel@localhost:5433/keel_test
+      KEEL_LLM_PROVIDER: none
+      KEEL_EMBEDDING_PROVIDER: deterministic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install -e '.[dev]'
+          sudo apt-get update -qq
+          sudo apt-get install -y jq
+      - name: Run full test suite, including real MCP and Bash hooks
+        run: pytest -q

@@ -1,10 +1,30 @@
 import json
+import pytest
 
 from keel import repo
 from keel.llm.embeddings import DeterministicEmbedder
 from keel.conflict.pipeline import detect, Subject
 from keel.conflict.judge import Judgment
 from tests.fakes import ScriptedJudge, ErroringJudge, CountingJudge
+
+
+@pytest.mark.parametrize("persist", [False, True])
+async def test_duplicates_are_not_actionable_conflicts(conn, persist):
+    e = DeterministicEmbedder()
+    pid, person, part = await _ctx(conn)
+    await _active(conn, pid, person, part, "cursor pagination", ["api:orders"], await e.embed("cursor"))
+
+    class DuplicateJudge:
+        async def judge(self, subject_text, candidate):
+            return Judgment(relation="duplicates", confidence=0.99, explanation="same decision",
+                            evidence=candidate["statement"])
+
+    result = await detect(
+        conn, pid, Subject("use cursor pagination", ["api:orders"], await e.embed("cursor"),
+                           "planned_action", "planned"),
+        judge=DuplicateJudge(), top_k=8, threshold=0.6, persist=persist)
+    assert result.conflicts == []
+    assert await conn.fetchval("SELECT count(*) FROM conflict") == 0
 
 
 async def _ctx(conn):
