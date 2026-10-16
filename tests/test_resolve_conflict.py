@@ -74,6 +74,9 @@ async def test_resolution_changes_effective_context_and_notifies_dependents(conn
     observer = await repo.upsert_participant(conn, pid, other, "cc", "deep", "observer", [])
     await repo.insert_dependency(conn, existing_id, observer)
     await repo.insert_dependency(conn, new["id"], observer)
+    retired_before_resolution = new["id"] if outcome == "keep_existing" else existing_id
+    await repo.insert_alert(conn, project_id=pid, target_participant_id=observer,
+                            target_person_id=other, kind="change", ref_id=retired_before_resolution)
     out = await resolve_conflict(
         db_pool, Principal(pid, owner, "s1"), conflict_id=str(conflict["id"]),
         resolution="agreed by the team", outcome=outcome)
@@ -88,6 +91,10 @@ async def test_resolution_changes_effective_context_and_notifies_dependents(conn
     assert out["kept_decision_id"] == str(kept)
     alerts = await repo.pending_alerts_for_participant(conn, observer)
     assert any(a["kind"] == "change" and a["ref_id"] == kept for a in alerts)
+    assert all(a["ref_id"] != retired for a in alerts)
+    original_author = await repo.get_participant(conn, pid, other, "s2")
+    assert any(a["kind"] == "change" and a["ref_id"] == kept
+               for a in await repo.pending_alerts_for_participant(conn, original_author["id"]))
     event = await conn.fetchval("SELECT payload_json FROM event WHERE action='conflict.resolved'")
     assert json.loads(event)["outcome"] == outcome
     assert await validate_chain(conn, pid)
@@ -136,3 +143,22 @@ async def test_concurrent_resolutions_have_one_winner(conn, db_pool):
     assert sum(isinstance(r, ValueError) for r in results) == 1
     assert len(await repo.active_decisions(conn, pid, None)) == 1
     assert await conn.fetchval("SELECT count(*) FROM event WHERE action='conflict.resolved'") == 1
+
+
+async def test_retiring_decision_closes_its_other_conflicts_and_alerts(conn, db_pool):
+    pid, owner, other, conflict, new = await _pair(conn)
+    third = await repo.insert_decision(
+        conn, project_id=pid, statement="keyset", rationale="r", scope_tags=["api:orders"],
+        owner_person_id=other, source_participant_id=None)
+    obsolete = await repo.insert_conflict(
+        conn, project_id=pid, decision_a_id=third["id"], subject_type="decision",
+        subject_ref=str(new["id"]), relation="contradicts", severity="high", explanation="other conflict")
+    author = await repo.get_participant(conn, pid, other, "s2")
+    await repo.insert_alert(conn, project_id=pid, target_participant_id=author["id"],
+                            target_person_id=other, kind="conflict", ref_id=obsolete["id"])
+    await resolve_conflict(db_pool, Principal(pid, owner, "s1"),
+                           conflict_id=str(conflict["id"]), resolution="keep existing")
+    assert (await repo.get_conflict(conn, obsolete["id"]))["status"] == "dismissed"
+    assert all(a["ref_id"] != obsolete["id"]
+               for a in await repo.pending_alerts_for_participant(conn, author["id"]))
+    assert await validate_chain(conn, pid)

@@ -3,7 +3,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 _DEFAULT = Path(__file__).parent / "dataset.jsonl"
-_HARD = {"contradicts", "duplicates", "supersedes"}
+_HARD = {"contradicts", "supersedes"}
 
 
 @dataclass
