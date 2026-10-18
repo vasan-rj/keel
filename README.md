@@ -10,6 +10,12 @@
   <img alt="Status: pre-v1" src="https://img.shields.io/badge/status-pre--v1%20%2F%20hackathon-orange">
 </p>
 
+## Watch (44s)
+
+<video src="https://github.com/vasan-rj/keel/raw/master/brag-output/brag.mp4" poster="https://github.com/vasan-rj/keel/raw/master/brag-output/brag.jpg" controls muted width="820"></video>
+
+> ▶ If the player doesn't load, [watch the launch video](https://github.com/vasan-rj/keel/raw/master/brag-output/brag.mp4) &nbsp;·&nbsp; [poster](brag-output/brag.jpg)
+
 ---
 
 ## The problem
