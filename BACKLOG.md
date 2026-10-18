@@ -211,11 +211,11 @@ type: docs · P0 · M · labels: docs
 - **Acceptance:** top-level README (what/why/quickstart/demo); architecture doc committed (curated from `context/`); tool reference.
 - **Touch points:** `README.md`, `docs/` (un-ignore curated subset or copy).
 
-### O3 · Finalize the name (Keel is a placeholder)
+### O3 · Finalize the name (Keel is a placeholder) — ✅ RESOLVED (2026-10-18)
 type: ops · P1 · S · labels: ops
 - **Context:** OPEN_QUESTIONS #1 — name not settled; avoid hardening into package/domain prematurely.
-- **Acceptance:** decision recorded; package/repo/domain aligned if renamed.
-- **Touch points:** pyproject, imports, docs.
+- **Decision (vasanr, 2026-10-18):** Keep **Keel** as the confirmed working name; no rename. Identifiers may harden on `keel`. A later rebrand stays possible but is out of v1 scope.
+- **Acceptance:** decision recorded in OPEN_QUESTIONS #1 + README. No rename performed.
 
 ### O4 · Secret hygiene
 type: security · P0 · S · labels: security ops

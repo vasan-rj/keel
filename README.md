@@ -134,5 +134,5 @@ AI work is going multiplayer. Live shared sessions solve collaboration *inside* 
 
 ## License
 
-[Apache-2.0](LICENSE). (The project **name** "Keel" is still a placeholder — see
-`OPEN_QUESTIONS` #1 — but the license is settled.)
+[Apache-2.0](LICENSE). ("Keel" is the project's confirmed working name — see
+`OPEN_QUESTIONS` #1.)
