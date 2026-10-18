@@ -141,6 +141,54 @@ async def api_events(request):
     })
 
 
+async def api_ack_alert(request):
+    from keel.authz import require_write
+    from keel.ids import as_uuid
+    from keel.events import append_event
+    p = current_principal()
+    try:
+        require_write(p)
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    try:
+        aid = as_uuid(request.path_params["alert_id"])
+    except ValueError:
+        return JSONResponse({"error": "bad alert id"}, status_code=400)
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            ok = await repo.ack_alert_by_person(conn, aid, p.person_id)
+            if ok:
+                await append_event(conn, p.project_id,
+                                   actor=f"person:{p.person_id}/dashboard",
+                                   action="alert.acknowledged",
+                                   payload={"alert_id": str(aid), "via": "dashboard"})
+    return JSONResponse({"acknowledged": ok})
+
+
+async def api_resolve_conflict(request):
+    from keel.tools.resolve_conflict import resolve_conflict as _rc
+    p = current_principal()
+    try:
+        body = json.loads(await request.body() or b"{}")
+    except ValueError:
+        body = {}
+    resolution = body.get("resolution")
+    outcome = body.get("outcome", "keep_existing")
+    if not isinstance(resolution, str) or not resolution.strip():
+        return JSONResponse({"error": "resolution note is required"}, status_code=400)
+    try:
+        result = await _rc(db.get_pool(), p, conflict_id=request.path_params["conflict_id"],
+                           resolution=resolution, outcome=outcome)
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except LookupError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return JSONResponse(result)
+
+
 async def _resolve_principal(token: str, session_id: str | None) -> Principal | None:
     pool = db.get_pool()
     async with pool.acquire() as conn:
@@ -488,6 +536,8 @@ def _build_app():
     mcp_app = mcp.streamable_http_app()   # Starlette app, MCP route at /mcp
     mcp_app.add_route("/api/state", api_state, methods=["GET"])
     mcp_app.add_route("/api/events", api_events, methods=["GET"])
+    mcp_app.add_route("/api/alerts/{alert_id}/ack", api_ack_alert, methods=["POST"])
+    mcp_app.add_route("/api/conflicts/{conflict_id}/resolve", api_resolve_conflict, methods=["POST"])
     from keel.connect import endpoints as connect_endpoints
     mcp_app.add_route("/connect", connect_endpoints.connect_page, methods=["GET"])
     mcp_app.add_route("/connect/{name:str}", connect_endpoints.connect_asset, methods=["GET"])

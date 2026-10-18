@@ -354,6 +354,16 @@ async def acknowledge_retired_decision_alerts(conn, project_id, decision_id) -> 
         project_id, decision_id)
 
 
+async def ack_alert_by_person(conn, alert_id, person_id) -> bool:
+    """Person-scoped ack for the human dashboard (no participant). Acks an alert
+    targeted at this person. Returns True if a row was flipped."""
+    res = await conn.execute(
+        "UPDATE alert SET acknowledged_at=now() "
+        "WHERE id=$1 AND target_person_id=$2 AND acknowledged_at IS NULL",
+        alert_id, person_id)
+    return res.split()[-1] == "1"
+
+
 async def resolve_conflict(conn, conflict_id, resolution, resolved_by) -> None:
     await conn.execute(
         "UPDATE conflict SET status='resolved', resolution=$2, resolved_by=$3 WHERE id=$1",
