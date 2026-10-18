@@ -85,6 +85,29 @@ async def update_device_grant(conn, grant_id, **fields) -> None:
                        grant_id, *[fields[c] for c in cols])
 
 
+async def get_person_by_identity(conn, uid=None, email=None) -> asyncpg.Record | None:
+    if uid:
+        row = await conn.fetchrow("SELECT * FROM person WHERE firebase_uid=$1", uid)
+        if row:
+            return row
+    if email:
+        return await conn.fetchrow("SELECT * FROM person WHERE email=$1", email)
+    return None
+
+
+async def create_person_identity(conn, project_id, email, firebase_uid) -> asyncpg.Record:
+    import secrets
+    display = (email.split("@")[0] if email else "user")[:60]
+    return await conn.fetchrow(
+        """INSERT INTO person (project_id, display_name, token_hash, email, firebase_uid)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *""",
+        project_id, display, "disabled:" + secrets.token_hex(16), email, firebase_uid)
+
+
+async def set_person_firebase_uid(conn, person_id, firebase_uid) -> None:
+    await conn.execute("UPDATE person SET firebase_uid=$2 WHERE id=$1", person_id, firebase_uid)
+
+
 async def upsert_participant(conn, project_id, person_id, harness, tier, session_id, allowed_scopes):
     return await conn.fetchval(
         """INSERT INTO participant (project_id, person_id, harness, tier, session_id, allowed_scopes)

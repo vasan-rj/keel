@@ -8,6 +8,8 @@ from keel import repo
 from keel.config import get_settings
 from keel.connect import codes
 from keel.connect.tokenstore import ONE_SHOT
+from keel.auth.verifier import get_verifier
+from keel.events import append_event
 
 
 def _token_hash(t: str) -> str:
@@ -93,5 +95,57 @@ async def poll_token(request):
 
 
 async def approve(request):
-    # Replaced in Task 7; stub keeps the route importable.
-    return JSONResponse({"error": "login not configured"}, status_code=503)
+    data = await _body(request)
+    auth = request.headers.get("authorization", "")
+    id_token = auth[7:] if auth.lower().startswith("bearer ") else None
+    user_code = (data.get("user_code") or "").strip().upper()
+    scope = data.get("scope") or "full"
+    if scope not in ("full", "read_only"):
+        return JSONResponse({"error": "scope must be full or read_only"}, status_code=400)
+    if not id_token:
+        return JSONResponse({"error": "missing id token"}, status_code=401)
+    settings = get_settings()
+    verifier = get_verifier(settings)
+    if verifier is None:
+        return JSONResponse({"error": "login not configured"}, status_code=503)
+    try:
+        identity = verifier.verify(id_token)
+    except ValueError:
+        return JSONResponse({"error": "invalid id token"}, status_code=401)
+
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            person = await repo.get_person_by_identity(conn, uid=identity.uid, email=identity.email)
+            if person is None:
+                if not settings.default_project_id:
+                    return JSONResponse({"error": "no_project_for_identity"}, status_code=403)
+                person = await repo.create_person_identity(
+                    conn, settings.default_project_id, identity.email, identity.uid)
+            elif person["firebase_uid"] is None:
+                await repo.set_person_firebase_uid(conn, person["id"], identity.uid)
+
+            g = await conn.fetchrow(
+                "SELECT * FROM device_grant WHERE user_code=$1 AND status='pending' FOR UPDATE",
+                user_code)
+            if g is None:
+                return JSONResponse({"error": "unknown or already-used code"}, status_code=404)
+            if g["expires_at"] <= datetime.now(timezone.utc):
+                await repo.update_device_grant(conn, g["id"], status="expired")
+                return JSONResponse({"error": "expired_token"}, status_code=410)
+
+            plaintext = codes.new_device_code()
+            tok = await repo.insert_token(
+                conn, project_id=person["project_id"], person_id=person["id"],
+                token_hash=_token_hash(plaintext), kind="agent", label=g["harness"], scope=scope)
+            await repo.update_device_grant(
+                conn, g["id"], status="approved", scope=scope, person_id=person["id"],
+                token_id=tok["id"], approved_at=datetime.now(timezone.utc))
+            await append_event(conn, person["project_id"],
+                               actor=f"person:{person['id']}", action="agent.connected",
+                               payload={"grant_id": str(g["id"]), "harness": g["harness"],
+                                        "scope": scope, "token_id": str(tok["id"])})
+    ONE_SHOT.put(str(g["id"]), plaintext)
+    return JSONResponse({"approved": True,
+                         "agent": {"person": str(person["id"]), "scope": scope,
+                                   "harness": g["harness"]}})
