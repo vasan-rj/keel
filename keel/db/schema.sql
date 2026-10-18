@@ -207,3 +207,39 @@ CREATE TABLE IF NOT EXISTS judgment_cache (
     judgment   jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- I2/I3: Google identity on person + agent tokens + device-code grants (additive)
+ALTER TABLE person ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE person ADD COLUMN IF NOT EXISTS firebase_uid text;
+CREATE UNIQUE INDEX IF NOT EXISTS person_email_idx ON person (email) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS person_firebase_uid_idx ON person (firebase_uid) WHERE firebase_uid IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS token (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id  uuid NOT NULL REFERENCES project(id),
+    person_id   uuid NOT NULL REFERENCES person(id),
+    token_hash  text NOT NULL UNIQUE,
+    kind        text NOT NULL CHECK (kind IN ('person','agent')),
+    label       text,
+    scope       text NOT NULL DEFAULT 'full' CHECK (scope IN ('full','read_only')),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    revoked_at  timestamptz
+);
+CREATE INDEX IF NOT EXISTS token_person_idx ON token (person_id);
+
+CREATE TABLE IF NOT EXISTS device_grant (
+    id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_code_hash text NOT NULL UNIQUE,
+    user_code        text NOT NULL UNIQUE,
+    harness          text NOT NULL,
+    label            text,
+    status           text NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending','approved','denied','expired','claimed')),
+    scope            text,
+    person_id        uuid REFERENCES person(id),
+    token_id         uuid REFERENCES token(id),
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    approved_at      timestamptz,
+    expires_at       timestamptz NOT NULL,
+    last_polled_at   timestamptz
+);
