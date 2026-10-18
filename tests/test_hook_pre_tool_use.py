@@ -16,7 +16,8 @@ LLM_MODEL = "anthropic/claude-sonnet-5-5"  # config default when provider=anthro
 
 def _run(stdin: str, env: dict, cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", HOOK], input=stdin, text=True,
-                          capture_output=True, cwd=cwd, env={**os.environ, **env})
+                          capture_output=True, cwd=cwd,
+                          env={**os.environ, "XDG_STATE_HOME": os.path.join(cwd, "state"), **env})
 
 
 def _write_map(tmp_path, entries):
@@ -91,3 +92,34 @@ async def test_conflicting_edit_is_denied(conn, db_pool, tmp_path, hook_server_l
     assert hso["hookEventName"] == "PreToolUse"
     assert hso["permissionDecision"] == "deny"
     assert "cursor-based pagination" in hso["permissionDecisionReason"]
+
+    # An identical retry proceeds, but a different edit or session warns again.
+    retry = _run(_pre_json(tmp_path, "src/api/orders/pagination.py", planned),
+                 {"KEEL_URL": base_url, "KEEL_TOKEN": token}, str(tmp_path))
+    assert retry.returncode == 0 and retry.stdout.strip() == ""
+    changed = json.loads(_pre_json(tmp_path, "src/api/orders/pagination.py", planned))
+    changed["tool_input"]["old_string"] = "different original text"
+    revised = _run(json.dumps(changed), {"KEEL_URL": base_url, "KEEL_TOKEN": token}, str(tmp_path))
+    assert json.loads(revised.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    changed["session_id"] = "another-session"
+    another = _run(json.dumps(changed), {"KEEL_URL": base_url, "KEEL_TOKEN": token}, str(tmp_path))
+    assert json.loads(another.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+async def test_superseding_edit_does_not_deny(conn, db_pool, tmp_path, hook_server_llm):
+    base_url, token = hook_server_llm
+    pid = await repo.upsert_project(conn, "demo")
+    person = await repo.upsert_person(conn, pid, "vasan", hashlib.sha256(b"dev-token").hexdigest())
+    part = await repo.upsert_participant(conn, pid, person, "cc", "deep", "seed", [])
+    statement, rationale, planned = "page size 20", "current default", "page size 50"
+    await repo.insert_decision(
+        conn, project_id=pid, statement=statement, rationale=rationale,
+        scope_tags=["api:orders"], owner_person_id=person, source_participant_id=part,
+        embedding=await DeterministicEmbedder().embed(statement))
+    await put_cached(conn, cache_key(LLM_MODEL, planned, f"{statement}\n{rationale}"), LLM_MODEL,
+                     Judgment(relation="supersedes", confidence=0.99, explanation="replacement",
+                              evidence=statement))
+    _write_map(tmp_path, [{"pattern": "src/api/orders/", "scope_tags": ["api:orders"]}])
+    result = _run(_pre_json(tmp_path, "src/api/orders/page.py", planned),
+                  {"KEEL_URL": base_url, "KEEL_TOKEN": token}, str(tmp_path))
+    assert result.returncode == 0 and result.stdout.strip() == ""

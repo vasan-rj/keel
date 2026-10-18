@@ -187,8 +187,51 @@ async def ack_alert(conn, alert_id, participant_id) -> bool:
     return res.split()[-1] == "1"
 
 
-async def get_conflict(conn, conflict_id) -> asyncpg.Record | None:
-    return await conn.fetchrow("SELECT * FROM conflict WHERE id=$1", conflict_id)
+async def get_conflict(conn, conflict_id, *, for_update=False) -> asyncpg.Record | None:
+    query = "SELECT * FROM conflict WHERE id=$1"
+    if for_update:
+        query += " FOR UPDATE"
+    return await conn.fetchrow(query, conflict_id)
+
+
+async def lock_decisions(conn, project_id, decision_ids) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        "SELECT * FROM decision WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR UPDATE",
+        project_id, decision_ids)
+
+
+async def reject_decision(conn, decision_id) -> None:
+    await conn.execute(
+        "UPDATE decision SET status='rejected', updated_at=now() WHERE id=$1", decision_id)
+
+
+async def link_supersedes(conn, decision_id, supersedes_id) -> None:
+    await conn.execute(
+        "UPDATE decision SET supersedes_id=$2, updated_at=now() WHERE id=$1",
+        decision_id, supersedes_id)
+
+
+async def acknowledge_conflict_alerts(conn, project_id, conflict_id) -> None:
+    await conn.execute(
+        "UPDATE alert SET acknowledged_at=now() "
+        "WHERE project_id=$1 AND kind='conflict' AND ref_id=$2 AND acknowledged_at IS NULL",
+        project_id, conflict_id)
+
+
+async def dismiss_obsolete_conflicts(conn, project_id, decision_id, resolved_by, resolution):
+    rows = await conn.fetch(
+        "UPDATE conflict SET status='dismissed', resolution=$4, resolved_by=$3 "
+        "WHERE project_id=$1 AND status='open' AND "
+        "(decision_a_id=$2::uuid OR (subject_type='decision' AND subject_ref=($2::uuid)::text)) RETURNING id",
+        project_id, decision_id, resolved_by, resolution)
+    return [r["id"] for r in rows]
+
+
+async def acknowledge_retired_decision_alerts(conn, project_id, decision_id) -> None:
+    await conn.execute(
+        "UPDATE alert SET acknowledged_at=now() "
+        "WHERE project_id=$1 AND kind='change' AND ref_id=$2 AND acknowledged_at IS NULL",
+        project_id, decision_id)
 
 
 async def resolve_conflict(conn, conflict_id, resolution, resolved_by) -> None:

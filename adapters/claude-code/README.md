@@ -67,6 +67,20 @@ code. Most edits skip the LLM: the hook first does a cheap decision-free screen 
 when the scope actually carries decisions. Skipped (edit allowed) when `.keel/scopes.json` is
 absent, nothing matches, Keel is unreachable, or no LLM is configured.
 
+Only `contradicts` results deny an edit; duplicates and proposed supersessions do
+not. The hook remembers a warning for the **exact tool input, session, server,
+project path, and decision context** for 15 minutes. Re-plan after a warning, or
+retry the identical edit to proceed knowingly. A changed edit, another session,
+or changed decision context gets a fresh check and warning. Retries still contact
+Keel; the marker does not bypass detection. This is advisory acknowledgment, not
+proof that the edit is compliant.
+
+Warning markers contain only SHA-256 fingerprints and live under
+`${XDG_STATE_HOME:-$HOME/.local/state}/keel/deny-once/`. The hook also requires
+`sha256sum` or `shasum`; if hashing or marker storage fails it allows the edit.
+Marker directories may be removed after the session; their removal only causes
+another warning.
+
 ## PostToolUse drift (optional)
 With the same `.keel/scopes.json`, after an edit on a mapped scope that carries active
 decisions, Keel records the activity (`report_activity`) and — if it drifts — injects a
