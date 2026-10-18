@@ -492,6 +492,9 @@ def _build_app():
     mcp_app.add_route("/connect/device", connect_endpoints.start_device, methods=["POST"])
     mcp_app.add_route("/connect/token", connect_endpoints.poll_token, methods=["POST"])
     mcp_app.add_route("/connect/approve", connect_endpoints.approve, methods=["POST"])
+    mcp_app.add_route("/api/tokens", connect_endpoints.list_tokens_handler, methods=["GET"])
+    mcp_app.add_route("/api/tokens/{token_id}/revoke", connect_endpoints.revoke_token_handler,
+                      methods=["POST"])
     mcp_app.add_middleware(AuthMiddleware)
     # CORS added last -> outermost -> answers preflight OPTIONS before AuthMiddleware
     _origins = [o.strip() for o in os.environ.get("KEEL_CORS_ORIGINS", "*").split(",")]

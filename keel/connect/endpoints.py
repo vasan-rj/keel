@@ -94,6 +94,35 @@ async def poll_token(request):
     return JSONResponse({"error": "invalid_grant"}, status_code=404)
 
 
+def _row_token(r):
+    return {"id": str(r["id"]), "kind": r["kind"], "label": r["label"], "scope": r["scope"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "revoked_at": r["revoked_at"].isoformat() if r["revoked_at"] else None}
+
+
+async def list_tokens_handler(request):
+    from keel.server import current_principal
+    p = current_principal()
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        rows = await repo.list_tokens(conn, p.project_id, p.person_id)
+    return JSONResponse({"tokens": [_row_token(r) for r in rows]})
+
+
+async def revoke_token_handler(request):
+    from keel.server import current_principal
+    from keel.ids import as_uuid
+    p = current_principal()
+    try:
+        tid = as_uuid(request.path_params["token_id"])
+    except ValueError:
+        return JSONResponse({"error": "bad token id"}, status_code=400)
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        ok = await repo.revoke_token(conn, tid, p.person_id)
+    return JSONResponse({"revoked": ok})
+
+
 async def approve(request):
     data = await _body(request)
     auth = request.headers.get("authorization", "")
