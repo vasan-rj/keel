@@ -39,6 +39,16 @@ printf '%s' "$GEMINI_API_KEY" | gcloud secrets versions add keel-gemini-key --da
 # Cloud SQL unix-socket DSN (asyncpg reads host from the query string).
 DB_URL="postgresql://${SQL_USER}:${DB_PASSWORD}@/${SQL_DB}?host=/cloudsql/${CONN}"
 
+# Base env. The agent-connect flow (I2/I3) keeps the freshly minted token's
+# plaintext in a PROCESS-LOCAL one-shot store, so approve + claim must hit the
+# same instance -> pin max-instances=1 until a shared store lands. See
+# connect-oneshot-multiinstance / ARCHITECTURE "Identity, tokens & agent onboarding".
+ENV_VARS="KEEL_LLM_PROVIDER=gemini,KEEL_LLM_MODEL=gemini/gemini-2.0-flash,KEEL_EMBEDDING_PROVIDER=deterministic,KEEL_CORS_ORIGINS=*,DATABASE_URL=${DB_URL}"
+# Optional connect/login env, passed through only when set in the shell.
+[ -n "${KEEL_DEFAULT_PROJECT_ID:-}" ]  && ENV_VARS="${ENV_VARS},KEEL_DEFAULT_PROJECT_ID=${KEEL_DEFAULT_PROJECT_ID}"
+[ -n "${KEEL_FIREBASE_PROJECT_ID:-}" ] && ENV_VARS="${ENV_VARS},KEEL_FIREBASE_PROJECT_ID=${KEEL_FIREBASE_PROJECT_ID}"
+[ -n "${KEEL_FIREBASE_AUDIENCE:-}" ]   && ENV_VARS="${ENV_VARS},KEEL_FIREBASE_AUDIENCE=${KEEL_FIREBASE_AUDIENCE}"
+
 echo "== build + deploy Cloud Run service =="
 gcloud run deploy "$SERVICE" \
   --source . \
@@ -46,8 +56,8 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --add-cloudsql-instances "$CONN" \
   --set-secrets "GEMINI_API_KEY=keel-gemini-key:latest" \
-  --set-env-vars "KEEL_LLM_PROVIDER=gemini,KEEL_LLM_MODEL=gemini/gemini-2.0-flash,KEEL_EMBEDDING_PROVIDER=deterministic,KEEL_CORS_ORIGINS=*,DATABASE_URL=${DB_URL}" \
-  --cpu 1 --memory 512Mi --min-instances 0 --max-instances 4 --timeout 60
+  --set-env-vars "$ENV_VARS" \
+  --cpu 1 --memory 512Mi --min-instances 0 --max-instances 1 --timeout 60
 
 URL=$(gcloud run services describe "$SERVICE" --region "$GCP_REGION" --format='value(status.url)')
 echo "== DONE =="

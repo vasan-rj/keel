@@ -75,3 +75,19 @@ GEMINI_API_KEY=... KEEL_TEST_DATABASE_URL=... python -m pytest tests/test_llm_li
 - `min-instances 0` (scale to zero) — cold starts ~a few seconds; set `min-instances 1` for the demo.
 - `db-g1-small` is fine for a demo; size up for load.
 - Gemini `2.0-flash` is cheap/fast and supports structured output (used for the Judgment schema).
+
+## Agent connect / onboarding on Cloud Run (I2/I3)
+The device-code connect flow mints an agent token and holds its plaintext in a
+**process-local one-shot store**, so approve + claim must hit the same instance.
+`deploy.sh` pins `--max-instances 1` for this reason; raising it needs a shared
+token store first (see ARCHITECTURE "Identity, tokens & agent onboarding").
+
+Google sign-in on the `/connect` approve page needs a **Firebase project**. Set these
+in your shell before `deploy.sh` (passed through only when present):
+```
+export KEEL_FIREBASE_PROJECT_ID=your-firebase-project   # verifies Google ID tokens
+export KEEL_FIREBASE_AUDIENCE=your-firebase-project      # usually same as project id
+export KEEL_DEFAULT_PROJECT_ID=<keel project uuid>       # first-login person lands here
+```
+Without them, `/connect/approve` returns 503 and you seed tokens manually (see above);
+the rest of the product (MCP, dashboard, judge) is unaffected.
