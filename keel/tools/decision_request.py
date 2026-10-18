@@ -3,10 +3,12 @@ from keel.scope import normalize_tags
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 
 
 async def request_decision(pool, principal: Principal, *, question, owner_person,
                            options=None, scope_tags=None) -> dict:
+    require_write(principal)
     if not question or not question.strip():
         raise ValueError("question is required")
     tags = normalize_tags(scope_tags) if scope_tags else []

@@ -5,6 +5,7 @@ from keel.ids import as_uuid
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 from keel.scope import lock_scope_tags
 
 
@@ -64,6 +65,7 @@ async def _apply_outcome(conn, principal, rows, existing_id, subject_id, outcome
 
 async def resolve_conflict(pool, principal: Principal, *, conflict_id, resolution,
                            outcome: ResolutionOutcome = "keep_existing") -> dict:
+    require_write(principal)
     if outcome not in ("keep_existing", "accept_new"):
         raise ValueError("outcome must be keep_existing or accept_new")
     if not isinstance(resolution, str) or not resolution.strip():

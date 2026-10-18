@@ -5,6 +5,7 @@ from keel.scope import normalize_tags
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 
 _DEFAULT_CLAIM_TTL_S = 3600
 
@@ -23,6 +24,7 @@ def _actor(principal) -> str:
 
 async def create_handoff(pool, principal: Principal, *, to_person, scope_tags,
                          note=None, to_session=None) -> dict:
+    require_write(principal)
     tags = normalize_tags(scope_tags)  # raises ValueError if empty
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -74,6 +76,7 @@ async def _load_for_recipient(conn, principal, handoff_id):
 
 
 async def accept_handoff(pool, principal: Principal, *, handoff_id) -> dict:
+    require_write(principal)
     async with pool.acquire() as conn:
         async with conn.transaction():
             receiver = await _require_participant(conn, principal)
@@ -103,6 +106,7 @@ async def accept_handoff(pool, principal: Principal, *, handoff_id) -> dict:
 
 
 async def decline_handoff(pool, principal: Principal, *, handoff_id) -> dict:
+    require_write(principal)
     async with pool.acquire() as conn:
         async with conn.transaction():
             await _require_participant(conn, principal)

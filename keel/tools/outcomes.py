@@ -3,6 +3,7 @@ from keel.ids import as_uuid
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 
 _RESULTS = {"held", "reversed", "caused_rework"}
 _VERDICTS = {"useful", "noise"}
@@ -18,6 +19,7 @@ async def _require_participant(conn, principal):
 
 async def record_outcome(pool, principal: Principal, *, decision_id, result,
                          evidence_ref=None) -> dict:
+    require_write(principal)
     if result not in _RESULTS:
         raise ValueError(f"result must be one of {sorted(_RESULTS)}")
     async with pool.acquire() as conn:
@@ -42,6 +44,7 @@ async def record_outcome(pool, principal: Principal, *, decision_id, result,
 
 
 async def rate_alert(pool, principal: Principal, *, alert_id, verdict, note=None) -> dict:
+    require_write(principal)
     if verdict not in _VERDICTS:
         raise ValueError(f"verdict must be one of {sorted(_VERDICTS)}")
     async with pool.acquire() as conn:

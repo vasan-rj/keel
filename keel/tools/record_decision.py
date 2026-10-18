@@ -7,12 +7,14 @@ from keel.inbox import build_inbox
 from keel.conflict import check_on_insert
 from keel.llm.embeddings import get_embedder
 from keel.principal import Principal
+from keel.authz import require_write
 
 log = logging.getLogger("keel.tools")
 
 
 async def record_decision(pool, principal: Principal, *, statement, rationale,
                           scope_tags, supersedes=None) -> dict:
+    require_write(principal)
     """Record a decision (kind='decision'). Thin wrapper over the shared core."""
     return await _record(pool, principal, statement=statement, rationale=rationale,
                          scope_tags=scope_tags, kind="decision", supersedes=supersedes)

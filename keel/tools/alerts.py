@@ -3,6 +3,7 @@ from keel.ids import as_uuid
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 
 
 async def _require_participant(conn, principal):
@@ -20,6 +21,7 @@ async def list_alerts(pool, principal: Principal) -> dict:
 
 
 async def ack_alert(pool, principal: Principal, *, alert_id, note=None) -> dict:
+    require_write(principal)
     async with pool.acquire() as conn:
         async with conn.transaction():
             part = await _require_participant(conn, principal)

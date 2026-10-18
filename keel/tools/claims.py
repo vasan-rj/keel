@@ -5,6 +5,7 @@ from keel.scope import normalize_tags
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.principal import Principal
+from keel.authz import require_write
 
 
 async def _require_participant(conn, principal):
@@ -16,6 +17,7 @@ async def _require_participant(conn, principal):
 
 
 async def declare_dependency(pool, principal: Principal, *, decision_id) -> dict:
+    require_write(principal)
     async with pool.acquire() as conn:
         async with conn.transaction():
             part = await _require_participant(conn, principal)
@@ -36,6 +38,7 @@ async def declare_dependency(pool, principal: Principal, *, decision_id) -> dict
 
 
 async def claim_scope(pool, principal: Principal, *, scope_tags, ttl_seconds=3600) -> dict:
+    require_write(principal)
     tags = normalize_tags(scope_tags)
     expires = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     async with pool.acquire() as conn:
@@ -50,6 +53,7 @@ async def claim_scope(pool, principal: Principal, *, scope_tags, ttl_seconds=360
 
 
 async def release_scope(pool, principal: Principal, *, scope_tags=None) -> dict:
+    require_write(principal)
     tags = normalize_tags(scope_tags) if scope_tags else None
     async with pool.acquire() as conn:
         async with conn.transaction():

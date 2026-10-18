@@ -8,6 +8,7 @@ from keel.config import get_settings
 from keel.llm.embeddings import get_embedder
 from keel.conflict.pipeline import detect, Subject
 from keel.principal import Principal
+from keel.authz import require_write
 
 log = logging.getLogger("keel.tools")
 _SOURCES = {"edit", "turn", "commit", "pr", "gateway", "slack"}
@@ -15,6 +16,7 @@ _SOURCES = {"edit", "turn", "commit", "pr", "gateway", "slack"}
 
 async def report_activity(pool, principal: Principal, *, source, scope_tags=None,
                           summary=None, file_paths=None, ref=None) -> dict:
+    require_write(principal)
     if source not in _SOURCES:
         raise ValueError(f"source must be one of {sorted(_SOURCES)}")
     tags = normalize_tags(scope_tags) if scope_tags else []

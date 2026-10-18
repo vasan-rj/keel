@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from keel.principal import Principal
+from keel.authz import require_write
 from keel.tools.record_decision import _record
 
 
 async def record_lesson(pool, principal: Principal, *, statement, rationale, scope_tags,
                         expires_in_days=7) -> dict:
+    require_write(principal)
     """Record a reusable lesson (a gotcha / rule learned the hard way). A lesson is a
     decision with kind='lesson' and an expiry; it runs the same conflict checks and is
     delivered via get_context + the inbox."""
