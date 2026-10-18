@@ -24,6 +24,36 @@ async def get_person_by_token(conn, token_hash) -> asyncpg.Record | None:
     return await conn.fetchrow("SELECT * FROM person WHERE token_hash = $1", token_hash)
 
 
+async def insert_token(conn, *, project_id, person_id, token_hash, kind,
+                       label=None, scope="full") -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO token (project_id, person_id, token_hash, kind, label, scope)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
+        project_id, person_id, token_hash, kind, label, scope)
+
+
+async def get_token_by_hash(conn, token_hash) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        "SELECT * FROM token WHERE token_hash=$1 AND revoked_at IS NULL", token_hash)
+
+
+async def get_token(conn, token_id) -> asyncpg.Record | None:
+    return await conn.fetchrow("SELECT * FROM token WHERE id=$1", token_id)
+
+
+async def revoke_token(conn, token_id, person_id) -> bool:
+    res = await conn.execute(
+        "UPDATE token SET revoked_at=now() WHERE id=$1 AND person_id=$2 AND revoked_at IS NULL",
+        token_id, person_id)
+    return res.split()[-1] == "1"
+
+
+async def list_tokens(conn, project_id, person_id) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        "SELECT * FROM token WHERE project_id=$1 AND person_id=$2 ORDER BY created_at DESC",
+        project_id, person_id)
+
+
 async def upsert_participant(conn, project_id, person_id, harness, tier, session_id, allowed_scopes):
     return await conn.fetchval(
         """INSERT INTO participant (project_id, person_id, harness, tier, session_id, allowed_scopes)

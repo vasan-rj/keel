@@ -144,11 +144,15 @@ async def api_events(request):
 async def _resolve_principal(token: str, session_id: str | None) -> Principal | None:
     pool = db.get_pool()
     async with pool.acquire() as conn:
+        tok = await repo.get_token_by_hash(conn, token_hash(token))
+        if tok is not None:
+            return Principal(project_id=tok["project_id"], person_id=tok["person_id"],
+                             session_id=session_id, scope=tok["scope"])
         person = await repo.get_person_by_token(conn, token_hash(token))
     if person is None:
         return None
     return Principal(project_id=person["project_id"], person_id=person["id"],
-                     session_id=session_id)
+                     session_id=session_id, scope="full")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
