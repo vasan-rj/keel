@@ -42,6 +42,6 @@ htmlcov/
 .env*
 /env.local
 .claude
-.github
-brag-output/.keel.env
+brag-output/
+.keel.env
 **/.keel.env
