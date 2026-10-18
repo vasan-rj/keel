@@ -108,7 +108,8 @@ type: enhancement · P1 · M · labels: enhancement ops
 - **Acceptance:** a migration tool (alembic/sqitch) with ordered migrations; `ensure_schema` replaced/augmented; CI runs migrations.
 - **Touch points:** `keel/keel/db/` (new migrations dir), `pool.py`, docs.
 
-### E10 · CI pipeline (GitHub Actions)
+### E10 · CI pipeline (GitHub Actions) — ✅ DONE (shipped in PR #27)
+> `.github/workflows/tests.yml`: pgvector:pg16 service, full `pytest -q` incl. hook subprocess tests, on push + PR. Remaining extras (ruff lint, nightly live-LLM, secret scan) can be added incrementally.
 type: enhancement · P0 · M · labels: ops
 - **Context:** no CI. OSS needs PR gating.
 - **Acceptance:** Actions workflow: spin Postgres service, run `pytest`, lint (ruff), on PR+push; gated live-LLM job (nightly, keyed secret); secret scan.
@@ -290,14 +291,18 @@ type: enhancement · P1 · L · labels: enhancement identity
 - **Touch points:** `keel/db/schema.sql` (+migration), `keel/keel/repo.py`, `keel/keel/server.py` (principal → memberships), new `keel/keel/authz.py`.
 - **Approach:** additive tables; `AuthMiddleware` resolves person → memberships → role; default org per existing project for back-compat.
 
-### I2 · Firebase Auth login for dashboard + admin
+### I2 · Firebase Auth login for dashboard + admin — ✅ minimal slice done (2026-10-18)
+> Shipped the minimal slice: Google/Firebase ID-token verifier (`keel/auth/verifier.py`, google-auth, injectable fake), `person.email`/`firebase_uid`, create-on-first-login under `KEEL_DEFAULT_PROJECT_ID`, dashboard Google Sign-In on the approve page. Org/roles (I1) + full admin deferred.
+
 type: enhancement · P1 · M · labels: enhancement identity admin
 - **Context:** humans have no login; dashboard pastes a raw token.
 - **Acceptance:** dashboard + admin behind Google Sign-In (Firebase Auth); server verifies the Firebase ID token → maps to a Keel person (create-on-first-login or invite); no passwords stored.
 - **Touch points:** `dashboard/` (Firebase web SDK), `keel/keel/server.py` (verify Firebase JWT → `Principal`), `deploy/`.
 - **Approach:** accept `Authorization: Bearer <firebase-id-token>` on `/api/*`+admin; verify via Google public keys; reuse `AuthMiddleware`.
 
-### I3 · "Connect your agent" link (device-code) — Phase-1 auth
+### I3 · "Connect your agent" link (device-code) — Phase-1 auth — ✅ DONE (2026-10-18)
+> `/connect/device` + `/connect/token` (RFC 8628 states, one-shot claim) + Firebase-authed `/connect/approve` minting a scoped, revocable agent token (`token` table). Dashboard approve page. Spec/plan: docs/superpowers/{specs,plans}/2026-10-18-connect-agent-onboarding*.
+
 type: feature · P0 · L · labels: feature onboarding identity
 - **Context:** the headline ask — after installing the MCP server, a special URL authenticates the harness and auto-syncs sessions.
 - **Acceptance:** dashboard "Connect Claude Code / Codex" shows a one-time code + URL (OAuth Device Authorization Grant); the harness (`keel connect` CLI/hook) exchanges the code for a **scoped agent token**, writes it into the harness MCP config + installs hooks; SessionStart then auto-registers sessions. Token shown once, revocable.
@@ -323,7 +328,9 @@ type: enhancement · P1 · M · labels: enhancement identity ux
 - **Acceptance:** an `agent` (person + harness + label/machine) distinct from `session`; SessionStart registers, SessionEnd/Stop closes (absorbs old F5); `last_seen` heartbeat; dashboard org→project→person→agent→session tree with live/idle status.
 - **Touch points:** `schema.sql`, new `SessionEnd`/`Stop` hook in `adapters/claude-code/hooks/`, `repo.py`, dashboard.
 
-### I7 · Seamless onboarding per harness (CLI + prompt)
+### I7 · Seamless onboarding per harness (CLI + prompt) — ✅ DONE (2026-10-18, Claude Code + generic)
+> `python -m keel_connect <harness>` (`adapters/connect/`) runs the device flow and writes harness config; token lands in gitignored `.keel.env`. Recipes: claude-code (+ hooks copy) and generic MCP. Codex/Cursor recipes deferred.
+
 type: feature · P0 · M · labels: feature onboarding ux
 - **Context:** onboarding must be one-step, prompt/CLI-driven per harness.
 - **Acceptance:** `npx @keel/connect <harness>` (and a paste-prompt skill) installs hooks + `.mcp.json`, runs the I3 connect-link flow, verifies, prints next steps. Recipes for Claude Code, Codex, Cursor, generic MCP. Builds on `adapters/agent-skill`.

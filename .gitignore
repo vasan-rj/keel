@@ -41,3 +41,7 @@ htmlcov/
 /demo/workspace/.claude/hooks/
 .env*
 /env.local
+.claude
+.github
+brag-output/.keel.env
+**/.keel.env

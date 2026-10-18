@@ -134,6 +134,34 @@ The judge uses litellm + instructor, so the model is a config switch
   `switch`, …). Heuristic and deterministic, so the judgment cache keys on the routed
   model. Unset → routing off (always `KEEL_LLM_MODEL`).
 
+## Identity, tokens & agent onboarding (keel/connect/, adapters/connect/)
+Two bearer paths authenticate a call, both `sha256`-hashed at rest:
+- **Legacy person token** — a `person.token_hash` seeded at setup; scope `full`.
+- **`token` table** — per-person or per-agent tokens with a `scope` (`full` or
+  `read_only`) and a `revoked_at`. A `read_only` token is refused by the write
+  tools (`authz.require_write`); read tools and `/api/*` GET still work. Revoked
+  tokens are rejected at auth.
+
+**Connect flow (device-code, RFC 8628-shaped)** lets a human bring an agent online
+without hand-seeding SQL:
+1. The `keel_connect` CLI calls `POST /connect/device` (unauthenticated) and shows
+   the returned `user_code` + verification URL.
+2. The human opens `/connect`, signs in with Google (Firebase ID token verified
+   against Google's public certs), enters the code, and approves — `POST
+   /connect/approve` mints a scoped **agent token** for that person.
+3. The CLI polls `POST /connect/token`; on approval it receives the token once and
+   writes the harness config. Device codes and agent tokens are stored hashed; the
+   plaintext agent token is returned exactly once (a process-local one-shot store),
+   so a human re-approves if the server restarts before the claim. Poll abuse is
+   bounded by `slow_down`, a TTL, and a one-shot claim.
+
+A first-time Google identity with no matching person is attached to
+`KEEL_DEFAULT_PROJECT_ID` if set, otherwise approval is refused. Firebase config is
+optional: unset, `/connect/approve` returns 503 and legacy token auth is unaffected.
+Tokens are listed/revoked via `GET /api/tokens` and `POST /api/tokens/{id}/revoke`.
+The `keel_connect` CLI ships Claude Code and generic-MCP recipes; the token lands in
+a gitignored `.keel.env`, never in tracked config.
+
 ## Claude Code adapter (adapters/claude-code/)
 Fail-open bash hooks that curl the MCP endpoint:
 - `session_start.sh` — register the session + inject active decisions/inbox.
