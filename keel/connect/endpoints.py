@@ -1,7 +1,8 @@
 import json
+import os
 from datetime import datetime, timezone
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, FileResponse
 
 from keel.db import pool as db
 from keel import repo
@@ -15,6 +16,24 @@ from keel.events import append_event
 def _token_hash(t: str) -> str:
     from keel.server import token_hash
     return token_hash(t)
+
+
+_DASHBOARD = os.path.join(os.path.dirname(__file__), "..", "..", "dashboard")
+
+
+async def connect_page(request):
+    return FileResponse(os.path.join(_DASHBOARD, "connect.html"))
+
+
+async def connect_asset(request):
+    # Serves connect.js / connect.config.js next to the page (whitelisted names only).
+    name = request.path_params["name"]
+    if name not in ("connect.js", "connect.config.js"):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    path = os.path.join(_DASHBOARD, name)
+    if not os.path.isfile(path):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path, media_type="application/javascript")
 
 
 async def _body(request):

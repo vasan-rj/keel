@@ -489,6 +489,8 @@ def _build_app():
     mcp_app.add_route("/api/state", api_state, methods=["GET"])
     mcp_app.add_route("/api/events", api_events, methods=["GET"])
     from keel.connect import endpoints as connect_endpoints
+    mcp_app.add_route("/connect", connect_endpoints.connect_page, methods=["GET"])
+    mcp_app.add_route("/connect/{name:str}", connect_endpoints.connect_asset, methods=["GET"])
     mcp_app.add_route("/connect/device", connect_endpoints.start_device, methods=["POST"])
     mcp_app.add_route("/connect/token", connect_endpoints.poll_token, methods=["POST"])
     mcp_app.add_route("/connect/approve", connect_endpoints.approve, methods=["POST"])

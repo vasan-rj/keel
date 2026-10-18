@@ -80,6 +80,29 @@ async function loadMore() {
   }
 }
 
+async function post(path) {
+  const r = await fetch(base() + path, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + $("token").value, "X-Keel-Session": "dashboard" },
+  });
+  if (!r.ok) throw new Error(r.status === 401 ? "unauthorized (check token)" : "HTTP " + r.status);
+  return r.json();
+}
+
+async function renderTokens() {
+  const el = $("tokens");
+  if (!el) return;
+  try {
+    const data = await api("/api/tokens");
+    rows(el, data.tokens || [], (t) =>
+      `<span class="pill">${esc(t.kind)}/${esc(t.scope)}</span> ${esc(t.label || "")} `
+      + (t.revoked_at ? `<span class="mut">revoked</span>`
+                      : `<button data-revoke="${esc(t.id)}" style="padding:2px 8px;">revoke</button>`));
+  } catch (err) {
+    el.innerHTML = `<div class="row mut">${esc(err.message)}</div>`;
+  }
+}
+
 async function refresh(reset = false) {
   try {
     localStorage.setItem("keel_url", $("url").value);
@@ -102,6 +125,7 @@ async function refresh(reset = false) {
       mergeEvents(ev.events || []);
     }
     renderEvents();
+    await renderTokens();
     $("msg").textContent = "updated " + new Date().toLocaleTimeString();
   } catch (err) {
     $("msg").textContent = "error: " + err.message;
@@ -114,6 +138,19 @@ $("go").onclick = () => {
   refresh(true);
 };
 if ($("events-more")) $("events-more").onclick = loadMore;
+
+if ($("tokens")) $("tokens").addEventListener("click", async (e) => {
+  const id = e.target && e.target.getAttribute && e.target.getAttribute("data-revoke");
+  if (!id) return;
+  e.target.disabled = true;
+  try {
+    await post(`/api/tokens/${id}/revoke`);
+    await renderTokens();
+  } catch (err) {
+    $("msg").textContent = "revoke failed: " + err.message;
+    e.target.disabled = false;
+  }
+});
 
 $("auto").onchange = (e) => {
   clearInterval(timer);
