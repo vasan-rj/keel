@@ -77,7 +77,7 @@ If Keel is unreachable, keep working — Keel is advisory and must never block y
 | `claim_scope` / `release_scope` | When you start / stop actively working an area, so changes there alert you. Not a lock. | `scope_tags`, `ttl_seconds?` |
 | `declare_dependency` | When your work relies on a specific decision staying put. | `decision_id` |
 | `list_alerts` / `ack_alert` | To read the alerts affecting you and clear ones you've handled. | `alert_id`, `note?` |
-| `resolve_conflict` | Owner only — keep / supersede / reject a conflict on a decision you own. | `conflict_id`, `resolution` |
+| `resolve_conflict` | Owner only — keep the existing decision and reject the new one, or accept the new decision and supersede the existing one. | `conflict_id`, `resolution` (human explanation), `outcome?` (`keep_existing` default, or `accept_new`) |
 | `create_handoff` | Hand a scope to a teammate with its decisions + open conflicts attached. | `to_person`, `scope_tags`, `note?`, `to_session?` |
 | `accept_handoff` / `decline_handoff` | Recipient only — accept (claims the scope + depends on its decisions) or decline. | `handoff_id` |
 | `report_activity` | **After** you edit/commit on shared scope — records the work and flags drift (none/possible/conflict) from active decisions. | `source` (edit/turn/commit/pr/gateway/slack), `scope_tags?`, `summary?`, `file_paths?`, `ref?` |

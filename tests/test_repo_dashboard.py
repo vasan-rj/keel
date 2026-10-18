@@ -18,6 +18,24 @@ async def test_list_events_newest_first_and_limit(conn):
     assert evs[0]["action"] == "act.2" and evs[1]["action"] == "act.1"
 
 
+async def test_list_events_cursor_pagination(conn):
+    from keel.events import append_event
+    pid, person, part = await _ctx(conn)
+    for i in range(5):
+        await append_event(conn, pid, actor="a", action=f"act.{i}", payload={"i": i})
+    p1 = await repo.list_events(conn, pid, 2)
+    assert len(p1) == 2
+    assert p1[0]["action"] == "act.4" and p1[1]["action"] == "act.3"
+
+    p2 = await repo.list_events(conn, pid, 2, before_id=p1[-1]["id"])
+    assert len(p2) == 2
+    assert p2[0]["action"] == "act.2" and p2[1]["action"] == "act.1"
+
+    p3 = await repo.list_events(conn, pid, 2, before_id=p2[-1]["id"])
+    assert len(p3) == 1
+    assert p3[0]["action"] == "act.0"
+
+
 async def test_open_conflicts_excludes_resolved(conn):
     pid, person, part = await _ctx(conn)
     d = await repo.insert_decision(conn, project_id=pid, statement="x", rationale="r",

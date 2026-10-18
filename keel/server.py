@@ -20,7 +20,7 @@ from keel.tools.check_intent import check_intent as _check_intent
 from keel.tools.claims import declare_dependency as _declare_dependency, \
     claim_scope as _claim_scope, release_scope as _release_scope
 from keel.tools.alerts import list_alerts as _list_alerts, ack_alert as _ack_alert
-from keel.tools.resolve_conflict import resolve_conflict as _resolve_conflict
+from keel.tools.resolve_conflict import ResolutionOutcome, resolve_conflict as _resolve_conflict
 from keel.tools.handoff import create_handoff as _create_handoff, \
     accept_handoff as _accept_handoff, decline_handoff as _decline_handoff
 from keel.tools.report_activity import report_activity as _report_activity
@@ -118,10 +118,27 @@ async def api_events(request):
     except ValueError:
         limit = 100
     limit = max(1, min(limit, 500))
+
+    raw_cursor = request.query_params.get("before_id") or request.query_params.get("cursor")
+    before_id = None
+    if raw_cursor:
+        try:
+            val = int(raw_cursor)
+            if val > 0:
+                before_id = val
+            else:
+                return JSONResponse({"error": "invalid cursor parameter"}, status_code=400)
+        except ValueError:
+            return JSONResponse({"error": "invalid cursor parameter"}, status_code=400)
+
     pool = db.get_pool()
     async with pool.acquire() as conn:
-        rows = await repo.list_events(conn, p.project_id, limit)
-    return JSONResponse({"events": [_row_event(r) for r in rows]})
+        rows = await repo.list_events(conn, p.project_id, limit, before_id=before_id)
+    next_cursor = rows[-1]["id"] if rows and len(rows) == limit else None
+    return JSONResponse({
+        "events": [_row_event(r) for r in rows],
+        "next_cursor": next_cursor,
+    })
 
 
 async def _resolve_principal(token: str, session_id: str | None) -> Principal | None:
@@ -303,15 +320,21 @@ async def ack_alert(alert_id: str, note: str | None = None) -> dict:
 
 
 @mcp.tool()
-async def resolve_conflict(conflict_id: str, resolution: str) -> dict:
-    """Resolve a conflict on a decision you own (e.g. keep, supersede, or reject).
+async def resolve_conflict(conflict_id: str, resolution: str,
+                           outcome: ResolutionOutcome = "keep_existing") -> dict:
+    """Resolve a conflict on a decision you own and update effective team guidance.
 
     Owner only — the caller must own the decision the conflict was raised against,
-    otherwise this is refused. Marks the conflict resolved with your `resolution`
-    note and records who resolved it. Returns `resolved` and an `inbox`.
+    otherwise this is refused. `resolution` is the required human explanation.
+    `outcome="keep_existing"` (default) retains the existing decision and rejects
+    the conflicting new decision. `outcome="accept_new"` supersedes the existing
+    decision with the recorded new one; unavailable for unrecorded planned actions.
+    Updates decisions, closes conflict alerts, and notifies affected sessions in
+    one transaction. Closed/stale conflicts cannot be resolved again. Returns
+    `resolved`, the kept/retired decision ids, `outcome`, and an `inbox`.
     """
     return await _resolve_conflict(db.get_pool(), current_principal(), conflict_id=conflict_id,
-                                   resolution=resolution)
+                                   resolution=resolution, outcome=outcome)
 
 
 @mcp.tool()

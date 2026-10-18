@@ -87,6 +87,19 @@ On `record_decision`, detection runs inside a **savepoint** so a detection DB er
 degrades detection only; the decision write still commits (fail open). Propagation
 runs in the outer transaction, durable with the decision.
 
+Duplicates are informational and are not returned as actionable conflicts.
+Supersession suggestions remain visible through MCP but do not trigger an edit
+denial. Only a cited contradiction can trigger the optional PreToolUse warning.
+
+`resolve_conflict` requires the existing decision's owner and a human explanation.
+Its `outcome` defaults to `keep_existing`, which rejects a distinct conflicting
+new decision. `accept_new` requires a recorded new decision and supersedes the
+existing decision with it. A planned action cannot be promoted by resolution.
+The operation locks the conflict and affected scopes/decisions, refuses closed or
+stale conflicts, updates effective decisions, acknowledges that conflict's alerts,
+and propagates a change to affected sessions in one transaction. The event records
+the outcome and kept/retired IDs; no schema migration is needed.
+
 ### Hot path vs cold path
 - **Cold path** — `record_decision` / `check_intent` run the full LLM pipeline (seconds).
 - **Hot path** — the PreToolUse hook screens an edit with a deterministic, DB-only

@@ -11,11 +11,14 @@ from keel.events import append_event
 
 
 async def propagate_decision(conn, project_id, decision_row, author_participant_id,
-                             superseded_id=None) -> list[str]:
+                             superseded_id=None, *, notify_people=()) -> list[str]:
     """`change` alerts: participants with an overlapping active claim, UNION those
     with a dependency on this decision or the one it supersedes. Author excluded."""
     scope_tags = list(decision_row["scope_tags"])
     targets = {}  # participant_id -> person_id
+    for person_id in set(notify_people) - {None}:
+        for p in await repo.participants_of_person(conn, project_id, person_id):
+            targets[p["id"]] = p["person_id"]
     for p in await repo.participants_with_claim_overlap(conn, project_id, scope_tags):
         targets[p["id"]] = p["person_id"]
     dep_ids = [decision_row["id"]] + ([superseded_id] if superseded_id else [])

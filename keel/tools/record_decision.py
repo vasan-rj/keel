@@ -1,8 +1,7 @@
-import hashlib
 import logging
 from keel import repo
 from keel import propagation
-from keel.scope import reconcile
+from keel.scope import lock_scope_tags, reconcile
 from keel.events import append_event
 from keel.inbox import build_inbox
 from keel.conflict import check_on_insert
@@ -10,11 +9,6 @@ from keel.llm.embeddings import get_embedder
 from keel.principal import Principal
 
 log = logging.getLogger("keel.tools")
-
-
-def _scope_lock_key(project_id, tag: str) -> int:
-    material = f"scope:{project_id}:{tag}".encode()
-    return int.from_bytes(hashlib.sha256(material).digest()[:4], "big", signed=True)
 
 
 async def record_decision(pool, principal: Principal, *, statement, rationale,
@@ -47,9 +41,7 @@ async def _record(pool, principal: Principal, *, statement, rationale, scope_tag
             tags = await reconcile(conn, principal.project_id, scope_tags)  # raises ValueError if empty
 
             # serialize per scope tag (sorted order avoids deadlock)
-            for tag in sorted(tags):
-                await conn.execute("SELECT pg_advisory_xact_lock($1)",
-                                   _scope_lock_key(principal.project_id, tag))
+            await lock_scope_tags(conn, principal.project_id, tags)
 
             supersedes_id = None
             if supersedes:

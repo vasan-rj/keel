@@ -1,6 +1,15 @@
+import hashlib
 import re
 
 _WS = re.compile(r"\s+")
+
+
+async def lock_scope_tags(conn, project_id, tags: list[str]) -> None:
+    """Share the same lock order for decision recording and human resolution."""
+    for tag in sorted(set(tags)):
+        material = f"scope:{project_id}:{tag}".encode()
+        key = int.from_bytes(hashlib.sha256(material).digest()[:4], "big", signed=True)
+        await conn.execute("SELECT pg_advisory_xact_lock($1)", key)
 
 
 def normalize_tag(tag: str) -> str:
