@@ -115,7 +115,8 @@ type: enhancement · P0 · M · labels: ops
 - **Acceptance:** Actions workflow: spin Postgres service, run `pytest`, lint (ruff), on PR+push; gated live-LLM job (nightly, keyed secret); secret scan.
 - **Touch points:** `.github/workflows/ci.yml`, `pyproject.toml` (ruff), `tests/conftest.py`.
 
-### E11 · Dashboard write-actions + detail
+### E11 · Dashboard write-actions + detail — ✅ DONE (2026-10-18)
+> REST `POST /api/alerts/{id}/ack` (person-scoped) + `POST /api/conflicts/{id}/resolve`; dashboard ack/resolve buttons, resolve form (note + outcome), explanation drill-down, client-side scope-tag filter. read_only → 403.
 type: enhancement · P2 · M · labels: enhancement
 - **Context:** dashboard is read-only. Add ack-alert / resolve-conflict from the UI, conflict drill-down, scope filters.
 - **Acceptance:** actions call the tools with the entered token; read-only stays the default; separate write scope optional (see F10).
