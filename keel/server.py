@@ -157,6 +157,8 @@ async def _resolve_principal(token: str, session_id: str | None) -> Principal | 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        if request.url.path.startswith("/connect"):
+            return await call_next(request)   # /connect/* do their own (or no) auth
         auth = request.headers.get("authorization", "")
         session = _clean_session(request.headers.get("x-keel-session"))
         token = auth[7:] if auth.lower().startswith("bearer ") else None
@@ -486,11 +488,15 @@ def _build_app():
     mcp_app = mcp.streamable_http_app()   # Starlette app, MCP route at /mcp
     mcp_app.add_route("/api/state", api_state, methods=["GET"])
     mcp_app.add_route("/api/events", api_events, methods=["GET"])
+    from keel.connect import endpoints as connect_endpoints
+    mcp_app.add_route("/connect/device", connect_endpoints.start_device, methods=["POST"])
+    mcp_app.add_route("/connect/token", connect_endpoints.poll_token, methods=["POST"])
+    mcp_app.add_route("/connect/approve", connect_endpoints.approve, methods=["POST"])
     mcp_app.add_middleware(AuthMiddleware)
     # CORS added last -> outermost -> answers preflight OPTIONS before AuthMiddleware
     _origins = [o.strip() for o in os.environ.get("KEEL_CORS_ORIGINS", "*").split(",")]
     mcp_app.add_middleware(CORSMiddleware, allow_origins=_origins,
-                           allow_methods=["GET", "OPTIONS"],
+                           allow_methods=["GET", "POST", "OPTIONS"],
                            allow_headers=["*"])
 
     # starlette 1.x has no add_event_handler; wrap FastMCP's lifespan so the
