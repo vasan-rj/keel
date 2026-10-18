@@ -54,6 +54,37 @@ async def list_tokens(conn, project_id, person_id) -> list[asyncpg.Record]:
         project_id, person_id)
 
 
+_DEVICE_GRANT_FIELDS = {"status", "scope", "person_id", "token_id", "approved_at", "last_polled_at"}
+
+
+async def insert_device_grant(conn, *, device_code_hash, user_code, harness, label,
+                              expires_at) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """INSERT INTO device_grant (device_code_hash, user_code, harness, label, expires_at)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *""",
+        device_code_hash, user_code, harness, label, expires_at)
+
+
+async def get_device_grant_by_code_hash(conn, device_code_hash) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        "SELECT * FROM device_grant WHERE device_code_hash=$1", device_code_hash)
+
+
+async def get_device_grant_by_user_code(conn, user_code) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        "SELECT * FROM device_grant WHERE user_code=$1", user_code)
+
+
+async def update_device_grant(conn, grant_id, **fields) -> None:
+    bad = set(fields) - _DEVICE_GRANT_FIELDS
+    if bad:
+        raise ValueError(f"not an updatable device_grant field: {sorted(bad)}")
+    cols = list(fields)
+    sets = ", ".join(f"{c}=${i+2}" for i, c in enumerate(cols))
+    await conn.execute(f"UPDATE device_grant SET {sets} WHERE id=$1",
+                       grant_id, *[fields[c] for c in cols])
+
+
 async def upsert_participant(conn, project_id, person_id, harness, tier, session_id, allowed_scopes):
     return await conn.fetchval(
         """INSERT INTO participant (project_id, person_id, harness, tier, session_id, allowed_scopes)
