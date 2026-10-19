@@ -141,6 +141,10 @@ async def api_events(request):
     })
 
 
+async def api_healthz(request):
+    return JSONResponse({"status": "ok"})
+
+
 async def api_ack_alert(request):
     from keel.authz import require_write
     from keel.ids import as_uuid
@@ -205,8 +209,8 @@ async def _resolve_principal(token: str, session_id: str | None) -> Principal | 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path.startswith("/connect"):
-            return await call_next(request)   # /connect/* do their own (or no) auth
+        if request.url.path == "/healthz" or request.url.path.startswith("/connect"):
+            return await call_next(request)   # health + /connect/* do their own (or no) auth
         auth = request.headers.get("authorization", "")
         session = _clean_session(request.headers.get("x-keel-session"))
         token = auth[7:] if auth.lower().startswith("bearer ") else None
@@ -534,6 +538,7 @@ async def call_tool_for_test(token: str, session: str, tool: str, args: dict) ->
 
 def _build_app():
     mcp_app = mcp.streamable_http_app()   # Starlette app, MCP route at /mcp
+    mcp_app.add_route("/healthz", api_healthz, methods=["GET"])
     mcp_app.add_route("/api/state", api_state, methods=["GET"])
     mcp_app.add_route("/api/events", api_events, methods=["GET"])
     mcp_app.add_route("/api/alerts/{alert_id}/ack", api_ack_alert, methods=["POST"])

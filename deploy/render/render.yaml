@@ -1,0 +1,35 @@
+# Render Blueprint for Keel — runs the repo Dockerfile as a web service backed by
+# a managed Postgres 16 (pgvector enabled on first boot by ensure_schema).
+# Deploy: push master, then Render Dashboard -> New -> Blueprint -> pick this repo.
+# Set GEMINI_API_KEY in the dashboard (sync:false keeps it out of git).
+databases:
+  - name: keel-db
+    databaseName: keel
+    user: keel
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: keel
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    numInstances: 1          # one-shot connect token store is process-local
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: keel-db
+          property: connectionString
+      - key: KEEL_LLM_PROVIDER
+        value: gemini
+      - key: KEEL_LLM_MODEL
+        value: gemini/gemini-2.0-flash
+      - key: KEEL_EMBEDDING_PROVIDER
+        value: deterministic
+      - key: KEEL_CORS_ORIGINS
+        value: "*"
+      - key: GEMINI_API_KEY
+        sync: false          # set in the Render dashboard (secret)
