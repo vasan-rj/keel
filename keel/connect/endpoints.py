@@ -14,7 +14,7 @@ from keel.events import append_event
 
 
 def _token_hash(t: str) -> str:
-    from keel.server import token_hash
+    from keel.ctx import token_hash
     return token_hash(t)
 
 
@@ -120,7 +120,7 @@ def _row_token(r):
 
 
 async def list_tokens_handler(request):
-    from keel.server import current_principal
+    from keel.ctx import current_principal
     p = current_principal()
     pool = db.get_pool()
     async with pool.acquire() as conn:
@@ -129,7 +129,7 @@ async def list_tokens_handler(request):
 
 
 async def revoke_token_handler(request):
-    from keel.server import current_principal
+    from keel.ctx import current_principal
     from keel.ids import as_uuid
     p = current_principal()
     try:

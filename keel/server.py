@@ -1,6 +1,4 @@
 import contextlib
-import contextvars
-import hashlib
 import json
 import os
 
@@ -12,6 +10,7 @@ from starlette.responses import JSONResponse
 from keel.db import pool as db
 from keel.config import get_settings
 from keel.principal import Principal
+from keel.ctx import _principal_var, token_hash, current_principal  # single-instance context
 from keel import repo
 from keel.tools.register_session import register_session as _register_session
 from keel.tools.get_context import get_context as _get_context
@@ -27,22 +26,6 @@ from keel.tools.report_activity import report_activity as _report_activity
 from keel.tools.outcomes import record_outcome as _record_outcome, rate_alert as _rate_alert
 from keel.tools.decision_request import request_decision as _request_decision
 from keel.tools.lessons import record_lesson as _record_lesson
-
-_principal_var: contextvars.ContextVar[Principal | None] = contextvars.ContextVar(
-    "keel_principal", default=None
-)
-
-
-def token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def current_principal() -> Principal:
-    p = _principal_var.get()
-    if p is None:
-        raise PermissionError("no authenticated principal in context")
-    return p
-
 
 def _clean_session(raw: str | None) -> str | None:
     """Normalize the X-Keel-Session header. Claude Code does not auto-populate
