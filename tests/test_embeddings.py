@@ -13,7 +13,7 @@ async def test_provider_embedder_forwards_dimensions(monkeypatch):
         captured["dimensions"] = dimensions
         return SimpleNamespace(data=[{"embedding": [0.01] * dimensions}])
 
-    import litellm
+    litellm = pytest.importorskip("litellm")  # optional [llm] dep; skip when absent (CI runs .[dev])
     monkeypatch.setattr(litellm, "aembedding", fake_aembedding)
     e = ProviderEmbedder(model="gemini/gemini-embedding-001", dim=1536)
     vec = await e.embed("hello")
