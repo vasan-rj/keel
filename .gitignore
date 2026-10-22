@@ -29,8 +29,8 @@ htmlcov/
 .idea/
 .vscode/
 
-# Design docs + planning scratch (kept in-tree, out of version control)
-/docs/
+# Planning scratch (kept out of version control); the published site in docs/ IS tracked
+/docs/superpowers/
 /context/
 /.superpowers/
 

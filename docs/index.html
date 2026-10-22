@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Keel — catch contradictions between your AI agents, before the next action</title>
+<meta name="description" content="Keel is an open-source, vendor-neutral decision ledger for teams and their AI agents. When one agent's decision contradicts an active one, Keel quotes the evidence and warns every affected session — before the next action." />
+<meta name="theme-color" content="#06070d" />
+
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://vasan-rj.github.io/keel/" />
+<meta property="og:title" content="Keel — the shared decision ledger for AI agents" />
+<meta property="og:description" content="When one agent contradicts a decision the team already made, Keel quotes the evidence and warns every affected session — before the next action. Open-source, MCP-native." />
+<meta property="og:image" content="https://vasan-rj.github.io/keel/assets/img/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://vasan-rj.github.io/keel/assets/img/og.png" />
+
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,400..500&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="assets/css/styles.css" />
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js" } }
+</script>
+
+<script>
+  (function(){
+    var d = document.documentElement;
+    d.classList.add("js");
+    try{ if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) d.classList.add("reduced"); }catch(e){}
+  })();
+</script>
+</head>
+<body>
+
+<a class="skip" href="#top">Skip to content</a>
+<div class="grain" aria-hidden="true"></div>
+<div class="scrollbar" id="scrollbar" aria-hidden="true"></div>
+<div class="sr-only" id="copy-live" aria-live="polite"></div>
+
+<!-- ───────────────────────── NAV ───────────────────────── -->
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="Keel — home">
+    <span class="brand__mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="24" height="24">
+        <circle cx="16" cy="16" r="4" class="mk-core"/>
+        <circle cx="16" cy="5"  r="1.9" class="mk-node"/>
+        <circle cx="27" cy="22" r="1.9" class="mk-node"/>
+        <circle cx="5"  cy="22" r="1.9" class="mk-node"/>
+        <path d="M16 16 L16 5 M16 16 L27 22 M16 16 L5 22" class="mk-spoke"/>
+      </svg>
+    </span>
+    <span class="brand__word">Keel</span>
+  </a>
+  <nav class="nav__links" aria-label="Primary">
+    <a href="#how">How it works</a>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#build">Build</a>
+    <a class="nav__ghost" href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
+
+<main id="top">
+
+<!-- ───────────────────────── HERO ───────────────────────── -->
+<section class="hero" id="hero">
+  <canvas class="hero__canvas" id="hero-canvas" aria-hidden="true"></canvas>
+  <div class="hero__labels" id="hero-labels" aria-hidden="true"></div>
+  <div class="hero__fallback" aria-hidden="true"></div>
+  <div class="hero__scrim" aria-hidden="true"></div>
+
+  <div class="hero__inner">
+    <p class="hero__eyebrow" data-rise>Agent infrastructure · the shared intent layer</p>
+    <h1 class="hero__title">
+      <span data-rise>Your AI agents just</span>
+      <span data-rise>made <em>contradictory</em> calls.</span>
+    </h1>
+    <p class="hero__sub" data-rise>
+      Keel is the shared decision ledger for teams and their agents. When one session's
+      decision breaks one the team already made, Keel quotes the evidence and warns every
+      affected session — <strong>before the next action</strong>.
+    </p>
+
+    <button class="install" data-copy="git clone https://github.com/vasan-rj/keel" data-rise type="button" aria-label="Copy clone command">
+      <span class="install__prompt">$</span>
+      <code class="install__cmd">git clone https://github.com/vasan-rj/keel</code>
+      <span class="install__copy" data-copy-label>Copy</span>
+    </button>
+
+    <div class="hero__cta" data-rise>
+      <a class="btn btn--primary" href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener">
+        Star on GitHub
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.9 4.2 13.4l.7-4.3-3.1-3 4.3-.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </a>
+      <a class="textlink" href="#quickstart">read the quickstart ↓</a>
+    </div>
+
+    <p class="hero__meta" data-rise>open-source · MCP-native · Apache-2.0 · pre-v1</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── TRUST STRIP ───────────────────────── -->
+<section class="trust" aria-label="Built on, works with">
+  <div class="wrap trust__row">
+    <span class="trust__item">works with <b>Claude&nbsp;Code</b> · <b>Cursor</b> · any MCP agent</span>
+    <span class="trust__dot" aria-hidden="true"></span>
+    <span class="trust__item"><b>Postgres&nbsp;16</b> + pgvector · MCP streamable&nbsp;HTTP</span>
+    <span class="trust__dot" aria-hidden="true"></span>
+    <span class="trust__item">~170 tests · pipeline validated on a real&nbsp;LLM</span>
+    <a class="trust__stars" href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener" aria-label="GitHub stars">
+      <img src="https://img.shields.io/github/stars/vasan-rj/keel?style=flat&label=star&color=38e8d0&labelColor=0c0f1a" alt="Star Keel on GitHub" height="20" loading="lazy" />
+    </a>
+  </div>
+</section>
+
+<!-- ───────────────────────── LIVE CONFLICT SCENE ───────────────────────── -->
+<section class="scene section" id="scene" aria-label="Demonstration: Keel catching a conflict">
+  <div class="wrap">
+    <div class="scene__grid" data-scene role="img" aria-label="Session A records cursor pagination; session B then records offset pagination on the same scope; Keel raises a conflict quoting decision 41.">
+      <div class="scene__sessions">
+        <div class="win win--a">
+          <div class="win__bar"><span class="win__who">session A</span><span class="win__scope">api:orders</span></div>
+          <div class="win__body">
+            <p class="win__line win__line--1"><span class="tok-dim">record_decision</span>(<span class="tok-str">"Orders API uses <b>cursor</b> pagination"</span>)</p>
+            <p class="win__line win__line--2 win__ok">✓ active · decision&nbsp;#41</p>
+          </div>
+        </div>
+
+        <div class="win win--b">
+          <div class="win__bar"><span class="win__who">session B</span><span class="win__scope">api:orders</span></div>
+          <div class="win__body">
+            <p class="win__line win__line--3"><span class="tok-dim">record_decision</span>(<span class="tok-str">"Orders API uses <b class="amber">offset</b> pagination"</span>)<span class="caret">▍</span></p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="alert">
+        <div class="alert__head">
+          <span class="alert__badge">conflict</span>
+          <span class="alert__scope">api:orders</span>
+        </div>
+        <p class="alert__body">
+          Contradicts <strong>decision&nbsp;#41</strong> (session A):
+        </p>
+        <blockquote class="alert__quote">“Orders API uses <b>cursor</b> pagination”</blockquote>
+        <div class="alert__foot">
+          <span class="alert__conf">confidence&nbsp;0.91</span>
+          <span class="alert__rule">humans resolve — Keel flags</span>
+        </div>
+      </aside>
+    </div>
+    <p class="scene__cap" data-reveal>
+      Two sessions, same scope tag, opposite decisions. Keel caught it on the second write —
+      with the evidence, not a guess.
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── WHAT IT DOES (3, unboxed) ───────────────────────── -->
+<section class="does section" id="what">
+  <div class="wrap">
+    <h2 class="h2 does__h" data-reveal>It records what was decided, warns whoever's affected, and catches drift from what agents do.</h2>
+
+    <ol class="jobs">
+      <li class="job" data-reveal>
+        <span class="job__n">01</span>
+        <div class="job__c">
+          <h3>Captures decisions as they're made</h3>
+          <p>Straight from agent sessions over MCP — one <code>record_decision</code> call, with an evidence-or-silence rule: no conflict is raised without quoting the decision it breaks.</p>
+        </div>
+      </li>
+      <li class="job" data-reveal>
+        <span class="job__n">02</span>
+        <div class="job__c">
+          <h3>Warns everyone affected, before they act</h3>
+          <p>Computed from who depends on the decision or claims the overlapping scope — including the author's <em>other</em> sessions. Humans resolve; Keel never overwrites.</p>
+        </div>
+      </li>
+      <li class="job" data-reveal>
+        <span class="job__n">03</span>
+        <div class="job__c">
+          <h3>Catches drift from what agents <em>do</em></h3>
+          <p>Edits, commits and tool calls — checked through Claude&nbsp;Code hooks, not only from what an agent remembers to report. This is the part nothing else does.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ───────────────────────── HOW IT WORKS / PIPELINE ───────────────────────── -->
+<section class="how section" id="how">
+  <div class="wrap">
+    <p class="kicker" data-reveal>The conflict pipeline</p>
+    <h2 class="h2" data-reveal>Five staged steps, per scope tag, on every write.</h2>
+
+    <ol class="pipe" data-pipe>
+      <li class="pipe__step" data-reveal><span class="pipe__i">1</span><span class="pipe__label">scope filter</span></li>
+      <li class="pipe__step" data-reveal><span class="pipe__i">2</span><span class="pipe__label">vector&nbsp;+&nbsp;keyword retrieval</span></li>
+      <li class="pipe__step" data-reveal><span class="pipe__i">3</span><span class="pipe__label">deterministic checks</span></li>
+      <li class="pipe__step" data-reveal><span class="pipe__i">4</span><span class="pipe__label">LLM judgment</span></li>
+      <li class="pipe__step pipe__step--gate" data-reveal><span class="pipe__i">5</span><span class="pipe__label">evidence gate</span></li>
+    </ol>
+
+    <p class="how__call" data-reveal>
+      The whole check runs <strong>transactionally with the insert, serialized per scope tag</strong> —
+      or two concurrent writes on one scope both pass and leave two contradictory decisions with
+      zero conflicts.
+    </p>
+    <p class="how__note" data-reveal>
+      Deterministic checks backstop the model; the evidence gate is a hard one. The ledger is
+      append-only, Postgres&nbsp;+&nbsp;pgvector, hash-chained.
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── FILM ───────────────────────── -->
+<section class="demo section" id="demo">
+  <div class="wrap">
+    <h2 class="h2" data-reveal>AI made building cheap.<br/>Coordinating never caught up.</h2>
+    <div class="demo__frame" data-reveal>
+      <video class="demo__video" controls muted playsinline preload="none"
+        poster="assets/video/brag-poster.jpg" width="1920" height="1080">
+        <source src="assets/video/brag.mp4" type="video/mp4" />
+        Your browser can't play this video —
+        <a href="https://github.com/vasan-rj/keel/raw/master/brag-output/brag.mp4" target="_blank" rel="noopener">watch it on GitHub</a>.
+      </video>
+    </div>
+    <p class="demo__meta" data-reveal>The 68-second launch film · motion-led, understandable on mute.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── QUICKSTART (+ spec strip + CTA) ───────────────────────── -->
+<section class="quick section" id="quickstart">
+  <div class="wrap quick__grid">
+    <div class="quick__lead" data-reveal>
+      <p class="kicker">Quickstart · dev</p>
+      <h2 class="h2">Running in<br/>five commands.</h2>
+      <p class="quick__p">
+        Postgres comes up in Docker; the server speaks MCP on <code>:8000</code>. Then record a
+        decision on <code>api:orders</code> in one session and <code>get_context</code> returns it
+        in another — cross-session intent, confirmed.
+      </p>
+      <dl class="spec">
+        <div><dt>works with</dt><dd>Claude&nbsp;Code · Cursor · any MCP agent</dd></div>
+        <div><dt>transport</dt><dd>MCP streamable HTTP</dd></div>
+        <div><dt>storage</dt><dd>Postgres&nbsp;16 + pgvector</dd></div>
+      </dl>
+    </div>
+
+    <div class="quick__main" data-reveal>
+      <div class="terminal">
+        <div class="terminal__bar">
+          <span class="terminal__path">~/keel $</span>
+          <button class="terminal__copy" data-copy="docker compose up -d db
+pip install -e &quot;.[dev]&quot;
+cp .env.example .env
+python -m keel.scripts.seed
+python -m keel.server" type="button" data-copy-label>Copy</button>
+        </div>
+        <pre class="terminal__body"><code><span class="c-com"># Postgres 16 + pgvector on host port 5433</span>
+<span class="c-cmd">docker</span> compose up -d db
+<span class="c-cmd">pip</span> install -e ".[dev]"
+<span class="c-cmd">cp</span> .env.example .env
+<span class="c-cmd">python</span> -m keel.scripts.seed
+<span class="c-cmd">python</span> -m keel.server   <span class="c-com"># MCP on :8000 (/mcp)</span></code></pre>
+      </div>
+      <div class="quick__cta">
+        <a class="btn btn--primary" href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener">Star on GitHub</a>
+        <a class="textlink" href="https://github.com/vasan-rj/keel/blob/master/README.md" target="_blank" rel="noopener">full README →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── BUILD (contributors) ───────────────────────── -->
+<section class="build-sec section" id="build">
+  <div class="wrap build__grid">
+    <div class="build__intro" data-reveal>
+      <p class="kicker kicker--v">Build it</p>
+      <h2 class="h2">A ledger the<br/>community shapes.</h2>
+      <p class="build__p">
+        Apache-2.0 and harness-agnostic on purpose — Claude&nbsp;Code is the first adapter,
+        not a dependency. Bring a new harness, a check, a test.
+      </p>
+      <div class="build__cta">
+        <a class="btn btn--line" href="https://github.com/vasan-rj/keel/issues" target="_blank" rel="noopener">Find an issue</a>
+        <a class="textlink" href="https://github.com/vasan-rj/keel/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guide →</a>
+      </div>
+    </div>
+    <div class="build__side" data-reveal>
+      <div class="tree" aria-hidden="true">
+<span class="tree__d">keel/</span>
+├─ <span class="tree__d">keel/</span>        <span class="tree__c">core engine — harness-neutral</span>
+├─ <span class="tree__d">adapters/</span>    <span class="tree__c">Claude Code hooks, skills</span>
+├─ <span class="tree__d">tests/</span>       <span class="tree__c">pytest suite, TDD</span>
+└─ <span class="tree__d">deploy/</span>      <span class="tree__c">Cloud Run, Docker</span>
+      </div>
+      <ul class="gfi">
+        <li><span class="gfi__tag">good-first-issue</span> add an adapter for a new MCP harness</li>
+        <li><span class="gfi__tag">good-first-issue</span> a deterministic check the LLM can lean on</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── FAQ ───────────────────────── -->
+<section class="faq section" id="faq">
+  <div class="wrap">
+    <p class="kicker" data-reveal>FAQ</p>
+    <h2 class="h2" data-reveal>Questions, answered.</h2>
+    <div class="faq__list" data-reveal>
+      <details class="faq__item">
+        <summary>What is Keel, exactly?</summary>
+        <p>An open-source decision ledger for teams and their AI agents. Agents record decisions over MCP; Keel checks each new one against the team's active decisions, and when something contradicts, it quotes the evidence and warns every affected session — before the next action.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Is it production-ready?</summary>
+        <p><strong>Pre-v1.</strong> The MCP server, the hybrid conflict pipeline (validated on a real LLM), propagation, handoff and the Claude&nbsp;Code adapter work today, with a ~170-test suite. Treat it as an early build you can run and contribute to, not a stable release.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Which agents does it work with?</summary>
+        <p><strong>Deep tier:</strong> Claude&nbsp;Code, through hooks, with guaranteed delivery. <strong>Light tier:</strong> any MCP agent — Cursor, web apps — best-effort via a piggyback inbox on every tool response. The core is harness-agnostic; Claude&nbsp;Code is the first adapter, not a dependency.</p>
+      </details>
+      <details class="faq__item">
+        <summary>How is it different from a memory store?</summary>
+        <p>It isn't memory. A memory store recalls facts; Keel governs <em>decisions</em> — it detects contradictions, cites the decision they break, and propagates the change to who's affected. It can sit on top of a memory store (Mem0, Postgres, a knowledge graph), not replace one.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── FINAL CTA ───────────────────────── -->
+<section class="final section">
+  <div class="wrap">
+    <h2 class="final__h" data-reveal>Keep your agents' decisions consistent.</h2>
+    <div class="final__cta" data-reveal>
+      <a class="btn btn--primary btn--lg" href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener">Star on GitHub</a>
+      <button class="btn btn--line btn--lg install-inline" data-copy="git clone https://github.com/vasan-rj/keel" type="button" data-copy-label><code>git clone …/vasan-rj/keel</code></button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__grid">
+    <div class="footer__brand">
+      <span class="brand__word">Keel</span>
+      <p>The shared decision ledger for teams and their AI agents. <span class="footer__fine">“Keel” is the project's working name.</span></p>
+      <p class="footer__meta">pre-v1 · Apache-2.0 · MCP streamable HTTP · built open</p>
+    </div>
+    <nav class="footer__col" aria-label="Product">
+      <h3>Product</h3>
+      <a href="#how">How it works</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#demo">Launch film</a>
+      <a href="#build">Build it</a>
+    </nav>
+    <nav class="footer__col" aria-label="Open source">
+      <h3>Open source</h3>
+      <a href="https://github.com/vasan-rj/keel" target="_blank" rel="noopener">Repository</a>
+      <a href="https://github.com/vasan-rj/keel/blob/master/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture</a>
+      <a href="https://github.com/vasan-rj/keel/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+      <a href="https://github.com/vasan-rj/keel/blob/master/BACKLOG.md" target="_blank" rel="noopener">Backlog</a>
+    </nav>
+  </div>
+  <div class="wrap footer__base">
+    <span>© 2026 Keel contributors.</span>
+    <span>Humans resolve; Keel flags.</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js" defer></script>
+<script src="assets/js/main.js" defer></script>
+<script src="assets/js/scroll.js" defer></script>
+<script type="module" src="assets/js/hero3d.js"></script>
+</body>
+</html>

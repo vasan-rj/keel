@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="Georgia, serif">
+  <defs>
+    <radialGradient id="g1" cx="78%" cy="18%" r="60%">
+      <stop offset="0%" stop-color="#38e8d0" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#06070d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="12%" cy="90%" r="55%">
+      <stop offset="0%" stop-color="#8a7bf7" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#06070d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#06070d"/>
+  <rect width="1200" height="630" fill="url(#g1)"/>
+  <rect width="1200" height="630" fill="url(#g2)"/>
+
+  <!-- constellation -->
+  <g transform="translate(980,150)" stroke="#38e8d0" stroke-opacity="0.4" stroke-width="1.5" fill="none">
+    <path d="M0 0 L40 -70 M0 0 L90 30 M0 0 L-70 40 M0 0 L60 90 M0 0 L-50 -60"/>
+  </g>
+  <g transform="translate(980,150)">
+    <circle r="14" fill="#38e8d0"/>
+    <circle cx="40" cy="-70" r="7" fill="#8a7bf7"/>
+    <circle cx="90" cy="30" r="7" fill="#38e8d0"/>
+    <circle cx="-70" cy="40" r="7" fill="#38e8d0"/>
+    <circle cx="60" cy="90" r="6" fill="#8a7bf7"/>
+    <circle cx="-50" cy="-60" r="6" fill="#38e8d0"/>
+  </g>
+
+  <text x="90" y="150" fill="#38e8d0" font-family="'JetBrains Mono', monospace" font-size="24" letter-spacing="6">OPEN SOURCE · MCP-NATIVE</text>
+  <text x="86" y="300" fill="#eef1f6" font-size="92" font-style="italic">The shared source of truth</text>
+  <text x="86" y="398" fill="#eef1f6" font-size="92" font-style="italic">underneath <tspan fill="#38e8d0">multiplayer AI</tspan>.</text>
+  <text x="90" y="500" fill="#c6ccda" font-family="'Hanken Grotesk', sans-serif" font-size="30">Keel — an intent &amp; decision ledger for teams and their AI agents.</text>
+
+  <text x="90" y="575" fill="#8d95a8" font-family="'JetBrains Mono', monospace" font-size="22">github.com/vasan-rj/keel</text>
+</svg>
